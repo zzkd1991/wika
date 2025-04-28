@@ -213,16 +213,16 @@ int main(void)
 	//HAL_Delay(2000);
 	API_WatchDog_Enable(0);
 
-//	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-	//HAL_Delay(5000);
-	//HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
+	HAL_Delay(1000);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
   /* USER CODE END 2 */
-	//Init_Moving_Average_Filter();
-	//__HAL_UART_ENABLE_IT(&hlpuart1, UART_IT_RXNE);
-	//__HAL_UART_ENABLE(&hlpuart1);
-//	if(1 == API_UART_RxFifoEnable(Uart_Recv_Fifo, UART_MSG_LEN))
-//		return 1;
-	//Early_Filter_Flow();
+	Init_Moving_Average_Filter();
+	__HAL_UART_ENABLE_IT(&hlpuart1, UART_IT_RXNE);
+	__HAL_UART_ENABLE(&hlpuart1);
+	if(1 == API_UART_RxFifoEnable(Uart_Recv_Fifo, UART_MSG_LEN))
+		return 1;
+	Early_Filter_Flow();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
@@ -260,8 +260,10 @@ int main(void)
 	//set_discharge_ibat_current_limit_value(1000);
 	//set_discharge_ibus_curr_limit_value(1000);
 	
-	interflash_ret1 =  erase_flash(0x8003000, 0x1000);
-		interflash_test();
+	//__disable_irq();
+	interflash_ret1 =  erase_flash(0x8008000, 0x1000);
+	//__enable_irq();
+	interflash_test();
 HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
 HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 
@@ -331,7 +333,7 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 		//断电/上电重启开发板
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
 		HAL_Delay(50);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//开机
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//开�?
 	}
 	
 	uart_msg_proc_flow(0, NULL);
@@ -558,8 +560,8 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  //HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  //HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
