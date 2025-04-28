@@ -126,7 +126,7 @@ static int i2c_bulk_read(uint8_t reg, uint8_t *val, int len)
 	uint8_t ret_value;
 	for(i = 0; i < len; i++)
 	{
-		i2c_ds3232_read(reg, &ret_value);
+		ret = i2c_ds3232_read(reg, &ret_value);
 		if(ret == 1)
 			return 1;
 		val[i] = ret_value;
@@ -144,7 +144,7 @@ static int i2c_bulk_write(uint8_t reg, uint8_t *value, int len)
 
 	for(i = 0; i < len; i++)
 	{
-		i2c_ds3232_write(reg, value + i);
+		ret = i2c_ds3232_write(reg, value + i);
 		if(ret == 1)
 			return ret;
 		reg++;
