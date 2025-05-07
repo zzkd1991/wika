@@ -4,7 +4,7 @@
 #include "main.h"
 #include <stdio.h>
 
-#define DS2782_REG_RACE	0x06 /*Remaining active relative capacity*/
+#define DS2782_REG_RARC	0x06 /*Remaining active relative capacity*/
 
 #define DS278x_REG_VOLT_MSB	0x0c
 #define DS278x_REG_TEMP_MSB	0x0a
@@ -75,7 +75,7 @@
 
 //current unit measurement in uA for a 1 milli-ohm sense resistor
 #define DS2782_CURRENT_UNITS	1563
-#define DS2782_REG_RARC		0x02		//Remaining active relateive capacity
+#define DS2786_REG_RARC		0x02		//Remaining active relateive capacity
 
 #define DS278x_DELAY		1000//ms
 
