@@ -135,6 +135,22 @@ typedef struct
 	uint8_t reserved :3;
 }adc_config;
 
+typedef struct
+{
+	uint8_t quick_ind :4;
+	uint8_t quick_signs :1;
+	uint8_t vol_sings :1;
+	uint8_t reserved :2;
+}quick_charge_sign;
+
+typedef struct 
+{
+	uint8_t output_enable :1;
+	uint8_t intput_enable :1;
+	uint8_t reserved :6;
+}quick_charge_conf;
+
+
 enum
 {
 	SW6301_ADC_CHANNEL_VBUS = 0,
@@ -171,5 +187,7 @@ int set_discharge_ibat_current_limit_value(float ibat_value);
 int set_charge_ibat_current_limit_value(float ibat_value);
 int set_vbus_vol_limit_value(float vbus_value);
 int charge_switch_func(uint8_t charge_switch);
+int quick_charge_indication(quick_charge_sign *value);
+int quick_charge_switch(quick_charge_conf value);
 
 #endif

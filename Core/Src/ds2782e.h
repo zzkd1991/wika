@@ -88,6 +88,7 @@ struct ds278x_info {
 void ds278x_cfg_check(void);
 int ds278x_get_status(struct ds278x_info *info);
 int ds2782_get_capacity(int *capacity);
+int ds278x_get_temp(int *temp);
 
 
 

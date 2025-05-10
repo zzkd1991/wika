@@ -2,6 +2,13 @@
 #include "ds2782e.h"
 #include <string.h>
 
+int my_current_uA;
+int my_voltage_uV;
+int mY_capacity;
+int my_error = 0;
+short my_raw = 0;
+uint8_t global_capacity = 0;
+
 #define DS278x_SLAVE_ADDRESS 0x68
 
 static int ds278x_read_regs(uint8_t port, int reg, uint8_t *data, uint16_t data_size)
@@ -191,7 +198,7 @@ void ds278x_cfg_check(void)
 		s_inited = 1;
 }
 
-static int ds278x_get_temp(int *temp)
+int ds278x_get_temp(int *temp)
 {
 	short raw;
 	int err;
@@ -227,6 +234,7 @@ static int ds2782_get_current(int *current_uA)
 	if(err)
 		return err;
 
+	my_raw = raw;
 	*current_uA = raw * (DS2782_CURRENT_UNITS / sense_res);
 	return 0;
 }
@@ -281,12 +289,15 @@ static int ds2782_estimate_capacity(int *capacity)
 	return 0;
 }
 
+
+
 int ds2782_get_capacity(int *capacity)
 {
 	int err;
 	uint8_t raw;
 
 	err = ds278x_read_reg(DS2782_REG_RARC, &raw);
+	//my_error = err;
 	if(err || raw == 0)
 	{
 		err = ds2782_estimate_capacity(capacity);
@@ -297,6 +308,7 @@ int ds2782_get_capacity(int *capacity)
 		return 0;
 	}
 
+	global_capacity = raw;
 	*capacity = raw;
 	return 0;
 }
@@ -325,6 +337,10 @@ int ds278x_get_status(struct ds278x_info *info)
 	info->capacity = capacity;
 	info->present = voltage_uV >= (ICM7100_BATTERY_EV / 2 / 2* 1000);
 
+	my_voltage_uV = voltage_uV;
+	my_current_uA = current_uA;
+	if(my_current_uA != 0)
+		return 0;
 	return 0;
 }
 

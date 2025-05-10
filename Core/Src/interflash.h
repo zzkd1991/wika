@@ -2,6 +2,9 @@
 #define _inter_flash_h_
 
 #include "main.h"
+
+#define MEM_ALIGNED(x) __attribute__((aligned(x)))
+
 							
 uint8_t flash_write_bytes(uint8_t *buff, uint32_t addr, uint32_t size);
 

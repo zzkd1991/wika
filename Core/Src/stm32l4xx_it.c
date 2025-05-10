@@ -22,6 +22,8 @@
 #include "stm32l4xx_it.h"
 #include "CircularQueue.h"
 #include "uart_prot.h"
+#include "led.h"
+#include "ds3232.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -180,6 +182,19 @@ void PendSV_Handler(void)
   /* USER CODE END PendSV_IRQn 1 */
 }
 
+uint8_t first_alarm = 0;
+void EXTI0_IRQHandler(void)
+{
+	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+	LEDG_ON;
+	ds3232_irq();
+	first_alarm++;
+	if(first_alarm == 2)
+	{
+		LEDG_OFF;
+	}
+}
+
 /**
   * @brief This function handles System tick timer.
   */
@@ -189,19 +204,56 @@ void SysTick_Handler(void)
 	extern mcu_req_timeout mcu_timeout;
 
   /* USER CODE END SysTick_IRQn 0 */
-  HAL_IncTick();
-	if(mcu_timeout.mcu_req_flag == 1 && uwTick >= mcu_timeout.mcu_req_tick + 1000)
+ 	 HAL_IncTick();
+	if(mcu_timeout.mcu_req_bat_discharge_flag == 1 && uwTick >= mcu_timeout.mcu_req_bat_discharge_tick+ 1000)
 	{
-		if(mcu_timeout.soc_ack_flag == 0)
+		if(mcu_timeout.soc_ack_bat_discharge_flag == 0)
 		{
-				mcu_timeout.timeout_flag = 1;
-		}
-		else if(mcu_timeout.soc_ack_flag == 1)
-		{
-			mcu_timeout.timeout_flag = 0;
+				mcu_timeout.timeout_bat_discharge_flag = 1;
 		}
 		
-		mcu_timeout.mcu_req_flag = 0;
+		mcu_timeout.mcu_req_bat_discharge_flag = 0;
+	}
+
+	if(mcu_timeout.mcu_req_get_bat_info_flag == 1 && uwTick >= mcu_timeout.mcu_req_get_bat_info_tick + 1000)
+	{
+		if(mcu_timeout.soc_ack_get_bat_info_flag == 0)
+		{
+			mcu_timeout.timeout_get_bat_info_flag = 1;
+		}
+
+		mcu_timeout.mcu_req_get_bat_info_flag = 0;
+	}
+
+	if(mcu_timeout.mcu_req_log_flag == 1 && uwTick >= mcu_timeout.mcu_req_log_tick + 1000)
+	{
+		if(mcu_timeout.soc_ack_log_flag == 0)
+		{
+			mcu_timeout.timeout_mcu_log_flag = 1;
+		}
+
+		mcu_timeout.mcu_req_log_flag = 0;
+	}
+
+	if(mcu_timeout.mcu_req_udp_ready_flag == 1 && uwTick >= mcu_timeout.mcu_req_udp_ready_tick + 1000)
+	{
+		if(mcu_timeout.soc_ack_udp_ready_flag == 0)
+		{
+			mcu_timeout.timeout_udp_ready_flag = 1;
+		}
+
+		mcu_timeout.mcu_req_udp_ready_flag = 0;
+	}
+
+
+	if(mcu_timeout.mcu_req_shutdown_soc_flag == 1 && uwTick >= mcu_timeout.mcu_req_shutdown_soc_tick + 1000)
+	{
+		if(mcu_timeout.soc_ack_shutdown_info_flag == 0)
+		{
+			mcu_timeout.timeout_shutdown_soc_flag = 1;
+		}
+
+		mcu_timeout.mcu_req_shutdown_soc_flag = 0;
 	}
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
@@ -243,6 +295,7 @@ void LPUART1_IRQHandler(void)
 	if(__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_RXNE) != RESET)
 	{
 		res = hlpuart1.Instance->RDR;
+		//HAL_UART_Receive(&hlpuart1, &res, 1, 1000);
 		 PushData_CircularQueue(&Uart_Recv_Queue, &res);
 		__HAL_UART_CLEAR_FLAG(&hlpuart1, UART_FLAG_RXNE);
 	}

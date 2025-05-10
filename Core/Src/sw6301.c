@@ -481,4 +481,18 @@ int charge_switch_func(uint8_t charge_switch)
 	return ret;
 }
 
+int quick_charge_indication(quick_charge_sign *value)
+{
+	int ret;
+	ret = i2c_sw6301_read(0x0F, (uint8_t *)value);
+	return ret;	
+}
+
+int quick_charge_switch(quick_charge_conf value)
+{
+	int ret;
+	ret = sw6301_write(0x11F, (uint8_t *)&value);
+	return ret;
+}
+
 

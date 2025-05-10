@@ -20,12 +20,10 @@ enum cmd_id_t {
 	CMD_REP_SHUTDOWN_SOC = MK_CMDID(2,2),
 	CMD_REQ_SET_RTC = MK_CMDID(2,3),
 	CMD_REP_SET_RTC = MK_CMDID(2,4),
-	//CMD_REQ_SET_MCU_GPIO_STATE = MK_CMDID(2,5),
-	//CMD_REP_SET_MCU_GPIO_STATE = MK_CMDID(2,6),
+	CMD_REQ_MCU_SELF_CHECK = MK_CMDID(2,5),
+	CMD_REP_MCU_SELF_CHECK = MK_CMDID(2,6),
 	CMD_REQ_MCU_CHARGE_CTRL = MK_CMDID(2,7),
 	CMD_REP_MCU_CHARGE_CTRL = MK_CMDID(2,8),
-	CMD_REQ_MCU_SELF_CHECK = MK_CMDID(2,9),
-	CMD_REP_MCU_SELF_CHECK = MK_CMDID(2,0x0a),
 	CMD_REQ_GET_MCU_VER = MK_CMDID(3,1),
 	CMD_REP_GET_MCU_VER = MK_CMDID(3,2),
 	CMD_REQ_GET_SOC_POWER_NUM = MK_CMDID(3,3),
@@ -42,18 +40,18 @@ enum cmd_id_t {
 	CMD_REP_MCU_LOG = MK_CMDID(5,2),
 	CMD_REQ_SOC_STATE = MK_CMDID(5,3),
 	CMD_REP_SOC_STATE = MK_CMDID(5,4),
-	CMD_REQ_BAT_DISCHARGE_STATE = MK_CMDID(5,5),
-	CMD_REP_BAT_DISCHARGE_STATE = MK_CMDID(5,6),
-	CMD_REQ_BAT_CHARGE_STATE = MK_CMDID(5,7),
-	CMD_REP_BAT_CHARGE_STATE = MK_CMDID(5,8),
-	CMD_REQ_MCU_SELF_CHECK_RES = MK_CMDID(5,9),
-	CMD_REP_MCU_SELF_CHECK_RES = MK_CMDID(5,0x0a),
+	CMD_REQ_BAT_CHARGE_STATE = MK_CMDID(5,5),
+	CMD_REP_BAT_CHARGE_STATE = MK_CMDID(5,6),
+	CMD_REQ_MCU_SELF_CHECK_RES = MK_CMDID(5,7),
+	CMD_REP_MCU_SELF_CHECK_RES = MK_CMDID(5,8),
 };
 
-enum battery_state_t {
-	BAT_STATE_NONE = 0,
-	BAT_STATE_CHARGING = 1,
-	BAT_STATE_DISCHARGING = 2,
+enum battery_state_type_t {
+	BATTERY_STATUS_UNKNOWN = 0,
+	BATTERY_STATUS_CHARGING = 1,
+	BATTERY_STATUS_DISCHARGING = 2,
+	BATTERY_STATUS_NOT_CHARGING = 3,
+	BATTERY_STATUS_FULL,
 };
 
 enum mcu_module_t {
@@ -121,10 +119,6 @@ __packed typedef struct battery_info_t {
 	uint8_t percentage;
 }battery_info;
 
-__packed typedef struct battery_ctrl_t {
-	uint8_t ctrl;
-}battery_ctrl;
-
 __packed typedef struct mcu_self_check_t {
 	int32_t mod;
 }mcu_self_check;
@@ -153,6 +147,11 @@ __packed typedef struct upgrade_state_t {
 	int8_t percentage;
 }upgrade_state;
 
+__packed typedef struct battery_state_t {
+	uint8_t state;
+}battery_state;
+
+
 #pragma pack()
 
 
@@ -164,9 +163,9 @@ typedef struct msg_data_t {
 typedef struct fill_msg_flag_t {
 	uint16_t msg_id;
 	//uint8_t fixed_msg;
-	uint8_t msg_len;
-	uint8_t errcode;
-	uint8_t *msg_total_len;
+	uint16_t msg_len;
+	int8_t errcode;
+	uint16_t msg_total_len;
 	uint8_t *msg_output;
 	void *msg_content;
 }fill_msg_flag;
@@ -210,11 +209,31 @@ typedef struct charge_state_t
 
 typedef struct mcu_req_timeout_t
 {
-	uint32_t mcu_req_tick;
-	uint32_t soc_ack_tick;
-	uint8_t mcu_req_flag;
-	uint8_t soc_ack_flag;
-	uint8_t timeout_flag;
+	uint32_t mcu_req_bat_discharge_tick;
+	uint32_t mcu_req_log_tick;
+	uint32_t mcu_req_get_bat_info_tick;
+	uint32_t mcu_req_shutdown_soc_tick;
+	uint32_t mcu_req_udp_ready_tick;
+	uint32_t soc_ack_bat_discharge_tick;
+	uint32_t soc_ack_mcu_log_tick;
+	uint32_t soc_ack_get_bat_info_tick;
+	uint32_t soc_ack_shutdown_info_tick;
+	uint32_t soc_ack_mcu_udp_ready_tick;
+	uint8_t mcu_req_bat_discharge_flag;
+	uint8_t mcu_req_log_flag;
+	uint8_t mcu_req_get_bat_info_flag;
+	uint8_t mcu_req_shutdown_soc_flag;
+	uint8_t mcu_req_udp_ready_flag;
+	uint8_t soc_ack_bat_discharge_flag;
+	uint8_t soc_ack_log_flag;
+	uint8_t soc_ack_get_bat_info_flag;
+	uint8_t soc_ack_shutdown_info_flag;
+	uint8_t soc_ack_udp_ready_flag;
+	uint8_t timeout_bat_discharge_flag;
+	uint8_t timeout_mcu_log_flag;
+	uint8_t timeout_get_bat_info_flag;
+	uint8_t timeout_shutdown_soc_flag;
+	uint8_t timeout_udp_ready_flag;
 }mcu_req_timeout;
 
 
@@ -228,7 +247,9 @@ typedef struct mcu_req_timeout_t
 #define EC_NODEV	-6
 #define EC_BUSY		-7
 
-#define UART_MSG_LEN 1024U
+#define UART_MSG_EXTRA_LEN	10
+
+#define UART_MSG_LEN (1024U + UART_MSG_EXTRA_LEN)
 
 extern uint8_t Uart_Recv_Fifo[UART_MSG_LEN];
 
@@ -239,6 +260,7 @@ uint8_t parse_dispacth_msg_flow(void);
 uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg);
 
 extern heartbeat_pro heartbeat_value;
+extern soc_power_num global_soc_power_num;
 
 #endif
 

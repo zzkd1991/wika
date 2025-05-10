@@ -131,7 +131,6 @@ static int i2c_bulk_read(uint8_t reg, uint8_t *val, int len)
 			return 1;
 		val[i] = ret_value;
 		reg++;
-		HAL_Delay(10);
 	}
 
 	return 0;
@@ -235,7 +234,6 @@ int ds3232_read_time(struct rtc_time *time)
 	return 0;
 }
 
-
 int ds3232_set_time(struct rtc_time *time)
 {
 	uint8_t buf[7];
@@ -292,7 +290,7 @@ out:
 	return ret;
 }
 
-static int ds3232_set_alarm(struct rtc_wkalrm *alarm)
+int ds3232_set_alarm(struct rtc_wkalrm *alarm)
 {
 	uint8_t control, stat;
 	int ret;
@@ -390,7 +388,7 @@ static int ds3232_alarm_irq_enable(unsigned int enabled)
 	return ds3232_update_alarm(enabled);
 }
 
-static int ds3232_irq(void)
+int ds3232_irq(void)
 {
 	int ret;
 	uint8_t stat, control;
@@ -425,8 +423,6 @@ static int ds3232_irq(void)
 				DS3232_DEBUG("Write Status Register error %d\n", ret);
 				return 1;
 			}
-
-		//	rtc_update_irq(1, RTC_AF );
 		}
 	}
 

@@ -66,8 +66,11 @@ uint16_t ADC_FINAL;
 uint16_t REAL_VALUE;
 MOVING_AVERAGE_FILTERtyp adc1_filter = {0};
 
+uint16_t match_succ = 0;
+
 struct ds278x_info my_info = {0};
 uint8_t key_value = 0;
+int quick_charge_ret = 0;
 
 //12V_Switch_EN ADC≤…—˘µÁ‘¥µÁ—πµÕ”⁄12V÷√∏ﬂ£¨∏ﬂ”⁄20V÷√µÕ
 //5VSW_EN socµÁ‘¥ø™πÿ
@@ -126,8 +129,9 @@ int my_ret5 = 0;
 int my_ret6 = 0;
 int my_ret10 = 0;
 chip_version version = {0};
-struct rtc_time rct_read = {0};
+struct rtc_datetime rct_read = {0};
 struct rtc_time rtc_set = {0};
+quick_charge_sign quick_value = {0};
 
 
 uint8_t charge_mode = 0;
@@ -170,11 +174,29 @@ extern mcu_req_timeout mcu_timeout;
 extern uint8_t interflash_ret1;
 int rtc_ret;
 
+struct ds278x_info my_2782_info;
+int my_temp_value;
+
+struct rtc_time time_value = {.tm_sec = 10, .tm_min = 20, .tm_hour = 5, .tm_mday = 2};
+struct rtc_wkalrm time_alarm_value1 = {.time.tm_sec = 20, .time.tm_min = 20, .time.tm_hour = 5, .time.tm_mday = 2};
+struct rtc_wkalrm time_alarm_value2 = {.time.tm_sec = 50, .time.tm_min = 20, .time.tm_hour = 5, .time.tm_mday = 2};
+struct rtc_time time_read_value = {0};
+extern uint8_t first_alarm;
+extern uint8_t notify_upgrade_flag;
+uart_msg msg_inst;
+short my_test_value;
+int my_test_size;
+
+uint16_t heart_beat;
+uint16_t version_beat;
+uint16_t get_rtc_beat;
+uint16_t test_soc_system_beat;
+uint16_t soc_state_beat;
+uint16_t set_rtc_beat;
+struct rtc_datetime  my_rtc_time;
+uint8_t rtc_len;
 int main(void)
 {
-
-  uint8_t ret;
-  uart_msg msg_inst;
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -210,11 +232,13 @@ int main(void)
 	i2c_init(1);
 	i2c_init(2);
 	i2c_init(3);
-	//HAL_Delay(2000);
+	HAL_Delay(2000);
 	API_WatchDog_Enable(0);
+//	memset(&time_value, 0, sizeof(time_value));
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
 	HAL_Delay(1000);
+	//HAL_Delay(5000);
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
   /* USER CODE END 2 */
 	Init_Moving_Average_Filter();
@@ -223,6 +247,8 @@ int main(void)
 	if(1 == API_UART_RxFifoEnable(Uart_Recv_Fifo, UART_MSG_LEN))
 		return 1;
 	Early_Filter_Flow();
+
+	rtc_len = sizeof(my_rtc_time);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
@@ -261,35 +287,42 @@ int main(void)
 	//set_discharge_ibus_curr_limit_value(1000);
 	
 	//__disable_irq();
-	interflash_ret1 =  erase_flash(0x8008000, 0x1000);
+	//interflash_ret1 =  erase_flash(0x8008000, 0x1000);
 	//__enable_irq();
-	interflash_test();
-HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
-HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
+		//interflash_test();
+//HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
+//HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 
-  rtc_ret = ds3232_probe();
-  if(rtc_ret != 0)
-  {
-		LEDG_OFF;
-  }
-  else
-  {
-		LEDG_ON;
-  }
+  //rtc_ret = ds3232_probe();
+  //if(rtc_ret != 0)
+  //{
+	//	LEDG_OFF;
+  //}
+  //else
+  //{
+	//	LEDG_ON;
+  //}
 
+  		//HAL_Delay(3000);
+		//ds3232_reset_flow();
+		//ds3232_probe();
+	//my_ret1 = ds3232_set_time(&time_value);
+	//time_alarm_value1.enabled = 1;
+	//my_ret2 = ds3232_set_alarm(&time_alarm_value1);
+	uint8_t ret;
   while (1)
-  {
-#if 0  
+  {  
 		//ds3232_read_time(&rct_read);
     /* USER CODE END WHILE */
-		//Get_Adc1_Average_Value();
-	//	ADC_Smooth();
+		Get_Adc1_Average_Value();
+		ADC_Smooth();
 		//ds278x_get_status(&my_info);
 	//my_ret = ds2782_get_capacity(&my_capacity);
 	//if(my_ret)
 	//	return my_ret;		
     /* USER CODE BEGIN 3 */
 		my_ret1 = get_chip_version(&version);
+#if 0		
 		my_ret3 = get_mode_status(&mode_stat);
   //charge_mode = 0;
 		my_ret2 = get_c_no_load_status(&load_value);
@@ -310,7 +343,8 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 		//uint8_t my_value = 0x18;
 		
 		//my_ret5 = sw6301_write_regs(2, 0x28, &my_value, 1);
-
+#endif
+#if 0
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBUS, &read_vbus_vol);
 				my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBAT, &read_vbat_vol);
@@ -325,15 +359,17 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 		i2c_sw6301_read(0x44, &reg44_value);
 //read_ibus_curr
 		my_flag++;
- #else
+ #endif
 
-#if 0
+#if 1
 	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
 	{
 		//Êñ≠Áîµ/‰∏äÁîµÈáçÂêØÂºÄÂèëÊùø
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//ÂÖ≥Êú∫
+		global_soc_power_num.off_num += 1;
 		HAL_Delay(50);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//ÂºÄÊú?
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//ÂºÄÊú∫
+		global_soc_power_num.on_num += 1;
 	}
 	
 	uart_msg_proc_flow(0, NULL);
@@ -346,10 +382,8 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 			//chargestate.charge_old_state = 1;
 			if(chargestate.charge_new_state != chargestate.charge_old_state)
 			{
-				msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
+				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
 				uart_msg_proc_flow(1, &msg_inst);
-				mcu_timeout.mcu_req_tick = HAL_GetTick();
-				mcu_timeout.mcu_req_flag = 1;
 				chargestate.charge_old_state = 1;
 			}
 		}
@@ -358,10 +392,8 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 			chargestate.charge_new_state = 0;
 			if(chargestate.charge_new_state != chargestate.charge_old_state)
 			{
-				msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
+				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
 				uart_msg_proc_flow(1, &msg_inst);		
-				mcu_timeout.mcu_req_tick = HAL_GetTick();
-				mcu_timeout.mcu_req_flag = 1;
 				chargestate.charge_old_state = 0;
 			}
 		}
@@ -369,16 +401,43 @@ HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 
 	if(REAL_VALUE < 18)
 	{
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);//ÂÖ≥Êú∫	
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);//ÂÖ≥Êú∫
+		global_soc_power_num.off_num += 1;
 	}
 
 	if(REAL_VALUE > 20)
 	{
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
 	}
+
+	if(notify_upgrade_flag == 1)
+	{	
+		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
+		uart_msg_proc_flow(1, &msg_inst);
+		notify_upgrade_flag = 0;
+	}
+
+	if(mcu_timeout.timeout_udp_ready_flag == 1)
+	{
+		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
+		uart_msg_proc_flow(1, &msg_inst);
+		mcu_timeout.timeout_udp_ready_flag = 0;
+	}
+
+	API_WatchDog_FeedDog();
 #endif
-	key_value = HAL_GPIO_ReadPin(KEY_GPIO_PORT, KEY_PIN);
-API_WatchDog_FeedDog();
+	//key_value = HAL_GPIO_ReadPin(KEY_GPIO_PORT, KEY_PIN);
+//API_WatchDog_FeedDog();
+	//	my_ret1 = ds3232_set_time(&time_value);
+
+	//HAL_Delay(1000);
+	//my_ret4 = ds3232_read_time(&time_read_value);
+	//LEDG_ON;
+	//if(first_alarm == 1)
+	//{
+	//	time_alarm_value2.enabled = 1;
+	//	my_ret2 = ds3232_set_alarm(&time_alarm_value2);
+	//}
 	//if(Key_Scan() == 1)
 	//{
 		//LEDG_ON;
@@ -404,7 +463,18 @@ API_WatchDog_FeedDog();
 //HAL_Delay(1000);
 //LEDG_OFF;
 //HAL_Delay(1000);
+#if 0
+ ds278x_get_status(&my_2782_info);
+ ds278x_get_temp(&my_temp_value);
+ ds2782_get_capacity(&my_capacity);
+		my_ret4 = get_system_status(&sys_stat);
+ my_test_size = sizeof(my_test_value);
+ quick_charge_ret = quick_charge_indication(&quick_value);
+ //my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 #endif
+
+uart_msg_proc_flow(0, NULL);
+	
 }
   /* USER CODE END 3 */
 }
@@ -532,7 +602,7 @@ static void MX_LPUART1_UART_Init(void)
   /* USER CODE END LPUART1_Init 1 */
   hlpuart1.Instance = LPUART1;
   hlpuart1.Init.BaudRate = 115200;
-  hlpuart1.Init.WordLength = UART_WORDLENGTH_7B;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
   hlpuart1.Init.StopBits = UART_STOPBITS_1;
   hlpuart1.Init.Parity = UART_PARITY_NONE;
   hlpuart1.Init.Mode = UART_MODE_TX_RX;
@@ -607,7 +677,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA9 PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10;
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -615,12 +685,18 @@ static void MX_GPIO_Init(void)
 
 
   /*Configure GPIO pins: PC13*/
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  //GPIO_InitStruct.Pin = GPIO_PIN_13;
+  //GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  //GPIO_InitStruct.Pull = GPIO_NOPULL;
+  //HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
   /* USER CODE BEGIN MX_GPIO_Init_2 */
+	GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
