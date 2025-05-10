@@ -39,8 +39,6 @@ mcu_req_timeout mcu_timeout = {0};
 battery_state global_battery_state = {0};
 uint8_t notify_upgrade_flag = 0;
 
-#define APPLICATION_ADDRESS	10
-
 typedef void (*pFunction)(void);
 
 uint32_t flashdestination = APPLICATION_ADDRESS;
@@ -377,11 +375,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				ret = EC_FAIL;
 			break;
 		case CMD_REQ_GET_RTC:
-			//ret = ds3232_read_time(&rtc_time);
-			rtc_time.tm_hour = 9;
-			rtc_time.tm_min = 30;
-		rtc_time.tm_sec = 45;
-		ret = 0;
+			ret = ds3232_read_time(&rtc_time);
 			if(ret == 0)
 			{
 				rtc_datetime.second = rtc_time.tm_sec;

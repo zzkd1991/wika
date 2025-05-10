@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+#define APPLICATION_ADDRESS	0x8010000
+
 #define MK_CMDID(t,id)		((((t)&0x0f) << 12) | (((id)&0xfff)))		
 #define MSG_LENG	1024
 
