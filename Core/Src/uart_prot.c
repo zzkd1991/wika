@@ -648,7 +648,7 @@ uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg)
 
 					if(ret == 0 || uart_msg_instance.msg_len > 1024)
 					{
-						memcpy(msg_content, &msg_content[2], 4);
+						memmove(msg_content, &msg_content[2], 4);
 						msgpro.total_index -= 2;
 						msgpro.pre_very = 0;
 					}
@@ -674,7 +674,7 @@ uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg)
 					}
 					else
 					{	
-						memcpy(msg_content, &msg_content[2], 8 + uart_msg_instance.msg_len);
+						memmove(msg_content, &msg_content[2], 8 + uart_msg_instance.msg_len);
 						msgpro.total_index -= 2;
 						msgpro.pre_very = 0;
 					}
@@ -684,13 +684,13 @@ uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg)
 		else if((msgpro.total_index >= 2) && (msg_content[1] != 0xAA))
 		{
 			msgpro.total_index -= 2;
-			memcpy(msg_content, &msg_content[2], msgpro.total_index);
+			memmove(msg_content, &msg_content[2], msgpro.total_index);
 			msgpro.pre_very = 0;
 		}
 		else if(msgpro.total_index >= 2)
 		{
 			msgpro.total_index -= 1;
-			memcpy(msg_content, &msg_content[1], msgpro.total_index);
+			memmove(msg_content, &msg_content[1], msgpro.total_index);
 			msgpro.pre_very = 0;
 		}
 	}
