@@ -287,7 +287,9 @@ int main(void)
 	//set_discharge_ibus_curr_limit_value(1000);
 	
 	//__disable_irq();
-	//interflash_ret1 =  erase_flash(0x8008000, 0x1000);
+	//interflash_ret1 =  erase_flash(0x8010000, 0x10000);
+
+ //erase_flash(APPLICATION_ADDRESS, 0x20000);
 	//__enable_irq();
 		//interflash_test();
 //HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
@@ -362,7 +364,7 @@ int main(void)
  #endif
 
 #if 1
-	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
+	/*if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
 	{
 		//断电/上电重启开发板
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
@@ -408,7 +410,7 @@ int main(void)
 	if(REAL_VALUE > 20)
 	{
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-	}
+	}*/
 
 	if(notify_upgrade_flag == 1)
 	{	
@@ -417,12 +419,12 @@ int main(void)
 		notify_upgrade_flag = 0;
 	}
 
-	if(mcu_timeout.timeout_udp_ready_flag == 1)
+	/*if(mcu_timeout.timeout_udp_ready_flag == 1)
 	{
 		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
 		uart_msg_proc_flow(1, &msg_inst);
 		mcu_timeout.timeout_udp_ready_flag = 0;
-	}
+	}*/
 
 	API_WatchDog_FeedDog();
 #endif

@@ -190,6 +190,7 @@ typedef struct msg_proc_t
 	uint8_t msg_cont_recv;
 	uint8_t msg_crc_recv;
 	uint8_t msg_tail_recv;
+	uint8_t pre_very;
 }msg_proc;
 
 typedef struct heartbeat_pro_t

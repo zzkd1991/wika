@@ -12,7 +12,7 @@ uint8_t Uart_Recv_Fifo[UART_MSG_LEN];
 extern UART_HandleTypeDef hlpuart1;
 
 common_rep global_discharge_state;
-uint8_t msg_content[UART_MSG_LEN];
+uint8_t msg_content[UART_MSG_LEN] = {0};
 msg_proc msgpro = {0};
 static uint8_t uart_content[UART_MSG_LEN];
 common_rep global_mcu_log;
@@ -38,6 +38,8 @@ charge_state chargestate = {0};
 mcu_req_timeout mcu_timeout = {0};
 battery_state global_battery_state = {0};
 uint8_t notify_upgrade_flag = 0;
+uart_msg uart_msg_instance = {0};
+
 
 typedef void (*pFunction)(void);
 
@@ -46,47 +48,52 @@ uint32_t write_index = 0;
 uint32_t JumpAddress;
 pFunction Jump_To_Application;
 
+uint16_t data_pack_num = 0;
+uint8_t enter_last_flow = 0;
+
+extern uint16_t match_succ;
+
 #define MSG_FIXED_SIZE	sizeof(common_rep)	
 
-enum cmd_id_t cmd_id_array[100] =
+enum cmd_id_t cmd_id_array[34] =
 {
-	CMD_MIN,
-	CMD_REQ_UPGRADE_MCU,
-	CMD_REP_UPGRADE_MCU,
-	CMD_REQ_MCU_UPD_READY,
-	CMD_REP_MCU_UPD_READY,
-	CMD_REQ_UPLOAD_MCU_FW,
-	CMD_REP_UPLOAD_MCU_FW,
-	CMD_REQ_MCU_UPD_STATE,
-	CMD_REP_MCU_UPD_STATE,
-	CMD_REQ_SHUTDOWN_SOC,
-	CMD_REP_SHUTDOWN_SOC,
-	CMD_REQ_SET_RTC,
-	CMD_REP_SET_RTC,
-	CMD_REQ_MCU_SELF_CHECK,
-	CMD_REP_MCU_SELF_CHECK,
-	CMD_REQ_MCU_CHARGE_CTRL,
-	CMD_REP_MCU_CHARGE_CTRL,
-	CMD_REQ_GET_MCU_VER,
-	CMD_REP_GET_MCU_VER,
-	CMD_REQ_GET_SOC_POWER_NUM,
-	CMD_REP_GET_SOC_POWER_NUM,
-	CMD_REQ_GET_RTC,
-	CMD_REP_GET_RTC,
+	//CMD_MIN,//1
+	CMD_REQ_UPGRADE_MCU,//2
+	CMD_REP_UPGRADE_MCU,//3
+	CMD_REQ_MCU_UPD_READY,//4
+	CMD_REP_MCU_UPD_READY,//5
+	CMD_REQ_UPLOAD_MCU_FW,//6
+	CMD_REP_UPLOAD_MCU_FW,//7
+	CMD_REQ_MCU_UPD_STATE,//8
+	CMD_REP_MCU_UPD_STATE,//9
+	CMD_REQ_SHUTDOWN_SOC,//10
+	CMD_REP_SHUTDOWN_SOC,//11
+	CMD_REQ_SET_RTC,//12
+	CMD_REP_SET_RTC,//13
+	CMD_REQ_MCU_SELF_CHECK,//14
+	CMD_REP_MCU_SELF_CHECK,//15
+	CMD_REQ_MCU_CHARGE_CTRL,//16
+	CMD_REP_MCU_CHARGE_CTRL,//17
+	CMD_REQ_GET_MCU_VER,//18
+	CMD_REP_GET_MCU_VER,//19
+	CMD_REQ_GET_SOC_POWER_NUM,//20
+	CMD_REP_GET_SOC_POWER_NUM,//21
+	CMD_REQ_GET_RTC,//22
+	CMD_REP_GET_RTC,//23
 	//CMD_REQ_GET_MCU_GPIO_STATE	= MK_CMDID(3,7),
 	//CMD_REP_GET_MCU_GPIO_STATE = MK_CMDID(3,8),
-	CMD_REQ_GET_BAT_INFO,
-	CMD_REP_GET_BAT_INFO,
-	CMD_REQ_HEARTBEAT,
-	CMD_REP_HEARTBEAT,
-	CMD_REQ_MCU_LOG,
-	CMD_REP_MCU_LOG,
-	CMD_REQ_SOC_STATE,
-	CMD_REP_SOC_STATE,
-	CMD_REQ_BAT_CHARGE_STATE,
-	CMD_REP_BAT_CHARGE_STATE,
-	CMD_REQ_MCU_SELF_CHECK_RES,
-	CMD_REP_MCU_SELF_CHECK_RES,	
+	CMD_REQ_GET_BAT_INFO,//24
+	CMD_REP_GET_BAT_INFO,//25
+	CMD_REQ_HEARTBEAT,//26
+	CMD_REP_HEARTBEAT,//27
+	CMD_REQ_MCU_LOG,//28
+	CMD_REP_MCU_LOG,//29
+	CMD_REQ_SOC_STATE,//30
+	CMD_REP_SOC_STATE,//31
+	CMD_REQ_BAT_CHARGE_STATE,//32
+	CMD_REP_BAT_CHARGE_STATE,//33
+	CMD_REQ_MCU_SELF_CHECK_RES,//34
+	CMD_REP_MCU_SELF_CHECK_RES,//35
 };
 
 
@@ -308,6 +315,7 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 			break;
 		default:
 			fill_msg(&msg_flag);
+			msg_flag.msg_total_len = 0;
 			break;
 	}
 
@@ -436,10 +444,11 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			mcu_timeout.soc_ack_shutdown_info_flag = 1;
 			break;
 		case CMD_REQ_UPLOAD_MCU_FW:
+			data_pack_num++;
 			memcpy((void *)&mcu_pack.index, msg_ptr->uart_msg_data.msg_ptr, 2);
 			last_pack = mcu_pack.index >> 15;
 			pack_index = mcu_pack.index & 0x7FFF;
-			if(pack_index != last_pack_index + 1)
+			if((pack_index != (last_pack_index + 1)) && (pack_index != 0))
 			{
 				ret = EC_FAIL;
 			}
@@ -469,10 +478,12 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			{
 				if(write_index != global_upgrade_mcu.filesize)
 				{
+					enter_last_flow = 0xff;
 					ret = EC_FAIL;
 				}
 				else//跳转流程
 				{
+					enter_last_flow = 1;
 					memset(&jump_uart_msg, 0, sizeof(jump_uart_msg));					
 					ret = EC_OK;
 					jump_uart_msg.msg_id = CMD_REQ_UPLOAD_MCU_FW;
@@ -522,16 +533,17 @@ uint8_t uart_msg_dispatch(uart_msg *msg_ptr)
 	return 0;
 }
 
+
 uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg)
 {
 	uint8_t recv_data;
 	int32_t ret;
 	uint16_t calc_crc;
-	uart_msg uart_msg_instance = {0};
 //	battery_discharge_state discharge_state;
 	int errcode;
 	fill_msg_flag msg_flag;
-	
+	uint8_t msg_tail_hi;
+	uint8_t msg_tail_lo;
 	short log_size;
 	mcu_log *log_ptr;
 
@@ -628,37 +640,58 @@ uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg)
 		{
 			if(msgpro.total_index >= 6)
 			{
-				uart_msg_instance.msg_len = msg_content[4] << 8 | msg_content[5];
-				uart_msg_instance.msg_id = msg_content[2] << 8 | msg_content[3];
-				ret = msgid_match_flow(uart_msg_instance.msg_id);
-				if(ret == 0 || uart_msg_instance.msg_len > 1024)
+				if(msgpro.pre_very == 0)
 				{
-					memcpy(msg_content, &msg_content[2], 4);
-					msgpro.total_index -= 2;
+					uart_msg_instance.msg_len = msg_content[4] << 8 | msg_content[5];
+					uart_msg_instance.msg_id = msg_content[2] << 8 | msg_content[3];
+					ret = msgid_match_flow(uart_msg_instance.msg_id);
+
+					if(ret == 0 || uart_msg_instance.msg_len > 1024)
+					{
+						memcpy(msg_content, &msg_content[2], 4);
+						msgpro.total_index -= 2;
+						msgpro.pre_very = 0;
+					}
+					else
+					{
+						msgpro.pre_very = 1;
+					}					
 				}
 				
-				if(msgpro.total_index >= (8 + uart_msg_instance.msg_len))
+				if(msgpro.total_index >= (10 + uart_msg_instance.msg_len))
 				{
 					uart_msg_instance.msg_crc = msg_content[6 + uart_msg_instance.msg_len] << 8 | msg_content[7 + uart_msg_instance.msg_len];
 					calc_crc = crc16(0, msg_content, uart_msg_instance.msg_len + 6);
-					if(calc_crc == uart_msg_instance.msg_crc)
+					msg_tail_hi = msg_content[msgpro.total_index - 2];
+					msg_tail_lo = msg_content[msgpro.total_index - 1];
+					if((calc_crc == uart_msg_instance.msg_crc) && (msg_tail_hi == 0x0D) && (msg_tail_lo == 0x0A))
 					{
-						uart_msg_instance.msg_id = msg_content[2] << 8 | msg_content[3];
 						uart_msg_instance.uart_msg_data.msg_ptr = &msg_content[6];
 						uart_msg_dispatch(&uart_msg_instance);
+						match_succ++;
 						msgpro.total_index = 0;
+						msgpro.pre_very = 0;
 					}
 					else
 					{	
-						memcpy(msg_content, &msg_content[2], 6 + uart_msg_instance.msg_len);
+						memcpy(msg_content, &msg_content[2], 8 + uart_msg_instance.msg_len);
 						msgpro.total_index -= 2;
+						msgpro.pre_very = 0;
 					}
 				}
 			}
 		}
-		else if((msgpro.total_index >= 2) && ((msg_content[0] != 0xAA) || (msg_content[1] != 0xAA)))
+		else if((msgpro.total_index >= 2) && (msg_content[1] != 0xAA))
 		{
-			msgpro.total_index = 0;
+			msgpro.total_index -= 2;
+			memcpy(msg_content, &msg_content[2], msgpro.total_index);
+			msgpro.pre_very = 0;
+		}
+		else if(msgpro.total_index >= 2)
+		{
+			msgpro.total_index -= 1;
+			memcpy(msg_content, &msg_content[1], msgpro.total_index);
+			msgpro.pre_very = 0;
 		}
 	}
 
