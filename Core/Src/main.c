@@ -186,6 +186,7 @@ extern uint8_t notify_upgrade_flag;
 uart_msg msg_inst;
 short my_test_value;
 int my_test_size;
+uint8_t my_ret = 2;
 
 uint16_t heart_beat;
 uint16_t version_beat;
@@ -195,6 +196,13 @@ uint16_t soc_state_beat;
 uint16_t set_rtc_beat;
 struct rtc_datetime  my_rtc_time;
 uint8_t rtc_len;
+extern void bsp_update_jumptoapp_evt_cbk(void);
+
+uint32_t origin_value1 = 0x33445566;
+uint16_t origin_value2 = 0x7788;
+uint32_t conved_value1 = 0;
+uint16_t conved_value2 = 0;
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -213,7 +221,7 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
-	
+
 //	ibat电流1.5A
 //	充电目标电压
 //	8.4
@@ -234,7 +242,7 @@ int main(void)
 	i2c_init(3);
 	HAL_Delay(2000);
 	API_WatchDog_Enable(0);
-//	memset(&time_value, 0, sizeof(time_value));
+	memset(&time_value, 0, sizeof(time_value));
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
 	HAL_Delay(1000);
@@ -248,7 +256,11 @@ int main(void)
 		return 1;
 	Early_Filter_Flow();
 
-	rtc_len = sizeof(my_rtc_time);
+	
+	 endian_conved_func(&origin_value1, 1);
+	 endian_conved_func(&origin_value2, 0);
+	
+	//rtc_len = sizeof(my_rtc_time);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
@@ -312,6 +324,9 @@ int main(void)
 	//time_alarm_value1.enabled = 1;
 	//my_ret2 = ds3232_set_alarm(&time_alarm_value1);
 	uint8_t ret;
+	
+	//my_ret = erase_flash(APPLICATION_ADDRESS, 0x20000);
+	//bsp_update_jumptoapp_evt_cbk();
   while (1)
   {  
 		//ds3232_read_time(&rct_read);
@@ -323,8 +338,8 @@ int main(void)
 	//if(my_ret)
 	//	return my_ret;		
     /* USER CODE BEGIN 3 */
-		my_ret1 = get_chip_version(&version);
-#if 0		
+		//my_ret1 = get_chip_version(&version);
+#if 1		
 		my_ret3 = get_mode_status(&mode_stat);
   //charge_mode = 0;
 		my_ret2 = get_c_no_load_status(&load_value);
@@ -364,7 +379,7 @@ int main(void)
  #endif
 
 #if 1
-	/*if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
+	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
 	{
 		//鏂數/涓婄數閲嶅惎寮�鍙戞澘
 		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//鍏虫満
@@ -374,7 +389,7 @@ int main(void)
 		global_soc_power_num.on_num += 1;
 	}
 	
-	uart_msg_proc_flow(0, NULL);
+	uart_msg_proc_flow();
 	ret = get_system_status(&sys_stat);
 	if(ret == 0)
 	{
@@ -385,7 +400,7 @@ int main(void)
 			if(chargestate.charge_new_state != chargestate.charge_old_state)
 			{
 				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
-				uart_msg_proc_flow(1, &msg_inst);
+				mcu_send_msg_flow(&msg_inst);
 				chargestate.charge_old_state = 1;
 			}
 		}
@@ -395,7 +410,7 @@ int main(void)
 			if(chargestate.charge_new_state != chargestate.charge_old_state)
 			{
 				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
-				uart_msg_proc_flow(1, &msg_inst);		
+				mcu_send_msg_flow(&msg_inst);		
 				chargestate.charge_old_state = 0;
 			}
 		}
@@ -410,19 +425,19 @@ int main(void)
 	if(REAL_VALUE > 20)
 	{
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-	}*/
+	}
 
 	if(notify_upgrade_flag == 1)
 	{	
 		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
-		uart_msg_proc_flow(1, &msg_inst);
+		mcu_send_msg_flow(&msg_inst);
 		notify_upgrade_flag = 0;
 	}
 
 	/*if(mcu_timeout.timeout_udp_ready_flag == 1)
 	{
 		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
-		uart_msg_proc_flow(1, &msg_inst);
+		mcu_send_msg_flow(&msg_inst);
 		mcu_timeout.timeout_udp_ready_flag = 0;
 	}*/
 
@@ -475,7 +490,7 @@ int main(void)
  //my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 #endif
 
-uart_msg_proc_flow(0, NULL);
+uart_msg_proc_flow();
 	
 }
   /* USER CODE END 3 */

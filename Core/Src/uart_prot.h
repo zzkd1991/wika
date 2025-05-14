@@ -260,7 +260,11 @@ extern uint8_t Uart_Recv_Fifo[UART_MSG_LEN];
 
 uint8_t API_UART_RxFifoEnable(uint8_t *rx_data, uint16_t length);
 uint8_t parse_dispacth_msg_flow(void);
-uint8_t uart_msg_proc_flow(uint8_t active_passive, uart_msg *active_msg);
+uint8_t uart_msg_proc_flow(void);
+void endian_conved_func(void *value, uint8_t type);
+int is_little_endian(void);
+void endian_conved_func(void *value, uint8_t type);
+void mcu_send_msg_flow(uart_msg *active_msg);
 
 extern heartbeat_pro heartbeat_value;
 extern soc_power_num global_soc_power_num;
