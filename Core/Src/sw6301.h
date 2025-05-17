@@ -171,14 +171,11 @@ int mode_set_func(mode_set mode_set_value);
 int event_int_enable_func(event_int_enable int_value);
 int display_status_func(display_status* display_value);
 int get_typec_status_func(typec_status *typec_status);
-void low_power_disable_func(void);
-void low_power_enable_func(void);
-int sw6301_write(uint16_t reg, uint8_t *value);
-void sw6301_write_enable(void);
+int low_power_func(uint8_t low_power);
 int discharge_config0_func(discharge_config0 config_value);
 int charge_config0_func(charge_config0 config_value);
 int force_control_func(force_control force_value);
-int set_charge_goal_vol(float value);//3.3-26
+//int set_charge_goal_vol(float value);//3.3-26
 int adc_config_func(adc_config adc_config_value);
 int sw6301_read_adc(uint8_t channel, float *value);
 int set_charge_ibus_curr_limit_value(float ibus_value);

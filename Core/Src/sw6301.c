@@ -60,7 +60,7 @@ cmd_fail:
 	return 1;	
 }
 
-int sw6301_write_regs(uint8_t port, uint16_t reg, uint8_t *data, uint16_t data_size)
+static int sw6301_write_regs(uint8_t port, uint16_t reg, uint8_t *data, uint16_t data_size)
 {
 	int i;
 	uint8_t slave_addr = SW6301_SLAVE_ADDRESS;
@@ -93,7 +93,80 @@ cmd_fail:
 	return 1;
 }
 
-int i2c_sw6301_read(uint8_t reg, uint8_t *value)
+int sw6301_write(uint16_t reg, uint8_t *value)
+{
+	uint8_t write_value;
+	uint8_t real_reg;
+	int ret;
+
+	write_value = 0x20;
+	ret = i2c_sw6301_write(0x24, &write_value);
+	if(ret)
+		return ret;
+	write_value = 0x40;
+	ret = i2c_sw6301_write(0x24, &write_value);
+	if(ret)
+		return ret;
+	write_value = 0x80;
+	ret = i2c_sw6301_write(0x24, &write_value);
+	if(ret)
+		return ret;
+
+	if(reg >= 0x100 && reg <= 0x156)
+	{
+		if(write_low_reg == 1)
+		{
+			write_value = 0x81;
+			ret = i2c_sw6301_write(0x24, &write_value);
+			if(ret)
+				return ret;
+			real_reg = reg - 0x100;
+			ret = i2c_sw6301_write(0x24, &real_reg);
+			if(ret)
+				return ret;
+		}
+		else if(write_low_reg == 0)
+		{
+			real_reg = reg - 0x100;
+			ret = i2c_sw6301_write(reg, value);
+			if(ret)
+				return ret;
+		}
+		write_low_reg = 1;
+	}
+	else if(reg < 0x100)
+	{
+		if(write_low_reg == 1)
+		{
+			ret = i2c_sw6301_write(reg, value);
+			if(ret)
+				return ret;
+		}
+		else if(write_low_reg == 0)
+		{
+			write_value = 0x00;
+			ret = i2c_sw6301_write(0xff, &write_value);
+			if(ret)
+				return ret;
+			ret = i2c_sw6301_write(reg, value);
+			if(ret)
+				return ret;
+		}
+		write_low_reg = 1;
+	}
+
+	return ret;
+}
+
+static int adc_config_func(adc_config adc_config_value)
+{
+	int ret;
+	ret = sw6301_write(0x30, (uint8_t *)&adc_config_value);
+	return ret;
+}
+
+
+static int i2c_sw6301_read(uint8_t reg, uint8_t *value)
 {
 	int ret;
 	ret = sw6301_read_regs(2, reg, value, 1);
@@ -135,7 +208,7 @@ int get_c_no_load_status(c_no_load_status *load_status)
 	return ret;
 }
 
-int mode_set_func(mode_set mode_set_value)
+static int mode_set_func(mode_set mode_set_value)
 {
 	int ret;
 	ret = sw6301_write(0x28, (uint8_t *)&mode_set_value);
@@ -149,130 +222,19 @@ int event_int_enable_func(event_int_enable int_value)
 	return ret;
 }
 
-int low_power_func(low_power_enable low_value)
+int low_power_func(uint8_t low_power)
 {
 	int ret;
-	ret = i2c_sw6301_write(0x23, (uint8_t *)&low_value);
+	low_power_enable set_value;
+	set_value.low_power = low_power;
+	ret = sw6301_write(0x23, (uint8_t *)&set_value);
 	return ret;
-}
-
-void low_power_disable_func(void)
-{
-	uint8_t write_value;
-	low_power_enable set_value;
-	set_value.low_power = 1;
-
-	low_power_func(set_value);
-
-	write_value = 0x20;
-	i2c_sw6301_write(0x24, &write_value);
-	write_value = 0x40;
-	i2c_sw6301_write(0x24, &write_value);
-	write_value = 0x80;
-	i2c_sw6301_write(0x24, &write_value);
-}
-
-void low_power_enable_func(void)
-{
-	low_power_enable set_value;
-	set_value.low_power = 0;
-
-	low_power_func(set_value);
-}
-
-
-int display_status_func(display_status* display_value)
-{
-	int ret;
-	ret = i2c_sw6301_read(0x14, (uint8_t *)display_value);
-	return ret;	
 }
 
 int get_typec_status_func(typec_status *typec_status)
 {
 	int ret;
 	ret = i2c_sw6301_read(0x19, (uint8_t *)typec_status);
-	return ret;
-}
-
-void sw6301_write_enable(void)
-{
-	uint8_t write_value;
-	
-	write_value = 0x20;
-	i2c_sw6301_write(0x24, &write_value);
-	
-	write_value = 0x40;
-	i2c_sw6301_write(0x24, &write_value);
-	
-	write_value = 0x80;
-	i2c_sw6301_write(0x24, &write_value);
-}
-
-int sw6301_write(uint16_t reg, uint8_t *value)
-{
-	uint8_t write_value;
-	uint8_t real_reg;
-	int ret;
-
-	write_value = 0x20;
-	ret = i2c_sw6301_write(0x24, &write_value);
-	if(ret)
-		return ret;
-	write_value = 0x40;
-	ret = i2c_sw6301_write(0x24, &write_value);
-	if(ret)
-		return ret;
-	write_value = 0x80;
-	ret = i2c_sw6301_write(0x24, &write_value);
-	if(ret)
-		return ret;
-
-	if(reg >= 0x100 && reg <= 0x156)
-	{
-		if(write_low_reg == 1)
-		{
-			write_value = 0x81;
-			ret = i2c_sw6301_write(0x24, &write_value);
-			if(ret)
-				return ret;
-			real_reg = reg - 0x100;
-			ret = i2c_sw6301_write(0x24, &real_reg);
-			if(ret)
-				return ret;
-		}
-		else if(write_low_reg == 0)
-		{
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		write_low_reg = 1;
-	}
-	else if(reg < 0x100)
-	{
-		if(write_low_reg == 1)
-		{
-			ret = i2c_sw6301_write(0x24, &write_value);
-			if(ret)
-				return ret;
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		else if(write_low_reg == 0)
-		{
-			write_value = 0x00;
-			ret = i2c_sw6301_write(0xff, &write_value);
-			if(ret)
-				return ret;
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		write_low_reg = 1;
-	}
-
 	return ret;
 }
 
@@ -389,8 +351,8 @@ int set_vbus_vol_limit_value(float vbus_value)
 }
 
 
-
-int set_charge_goal_vol(float value)//3.3-26
+#if 0
+int set_charge_goal_vol(float value)//3.3-26该值不用设置，硬件电阻设置好了
 {
 	uint16_t real_value;
 	uint8_t lower_value;
@@ -412,14 +374,7 @@ int set_charge_goal_vol(float value)//3.3-26
 	ret = sw6301_write(0x47, (uint8_t *)&goal_higher);
 	return ret;
 }
-
-int adc_config_func(adc_config adc_config_value)
-{
-	int ret;
-
-	ret = sw6301_write(0x30, (uint8_t *)&adc_config_value);
-	return ret;
-}
+#endif
 
 int sw6301_read_adc(uint8_t channel, float *value)
 {
