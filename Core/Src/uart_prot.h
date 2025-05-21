@@ -3,7 +3,10 @@
 
 #include "main.h"
 
-#define APPLICATION_ADDRESS	0x8010000
+#define A_SYSTEM_APPLICATION_ADDRESS	0x8010000
+#define B_SYSTEM_APPLICATION_ADDRESS	0x8020000
+
+#define AB_SYSTEM_FLAG_ADDRESS	0x8030000
 
 #define MK_CMDID(t,id)		((((t)&0x0f) << 12) | (((id)&0xfff)))		
 #define MSG_LENG	1024
@@ -32,10 +35,8 @@ enum cmd_id_t {
 	CMD_REP_GET_SOC_POWER_NUM = MK_CMDID(3,4),
 	CMD_REQ_GET_RTC			= MK_CMDID(3,5),
 	CMD_REP_GET_RTC			= MK_CMDID(3,6),
-	//CMD_REQ_GET_MCU_GPIO_STATE	= MK_CMDID(3,7),
-	//CMD_REP_GET_MCU_GPIO_STATE = MK_CMDID(3,8),
-	CMD_REQ_GET_BAT_INFO = MK_CMDID(3,9),
-	CMD_REP_GET_BAT_INFO = MK_CMDID(3,0x0a),
+	CMD_REQ_GET_BAT_INFO = MK_CMDID(3,7),
+	CMD_REP_GET_BAT_INFO = MK_CMDID(3,8),
 	CMD_REQ_HEARTBEAT = MK_CMDID(4,1),
 	CMD_REP_HEARTBEAT = MK_CMDID(4,2),
 	CMD_REQ_MCU_LOG = MK_CMDID(5,1),
@@ -116,7 +117,6 @@ __packed typedef struct rtc_datetime {
 }rtc_datetime;
 
 __packed typedef struct battery_info_t {
-	uint8_t state;
 	uint8_t temp;
 	uint8_t percentage;
 }battery_info;
@@ -124,6 +124,17 @@ __packed typedef struct battery_info_t {
 __packed typedef struct mcu_self_check_t {
 	int32_t mod;
 }mcu_self_check;
+
+__packed typedef struct mcu_self_check_ins_t
+{
+	mcu_self_check inst;
+	uint8_t self_check_flow_flag;
+}mcu_self_check_ins;
+
+__packed typedef struct mcu_self_check_ret_t {
+	uint32_t mod;
+	uint32_t result;
+}mcu_self_check_ret;
 
 __packed typedef struct mcu_log_t {
 	char level;
@@ -180,6 +191,7 @@ typedef struct uart_message_t {
 	msg_data uart_msg_data;
 	uint16_t msg_crc;	
  	uint16_t msg_tail;
+	uint8_t ret;
 }uart_msg;
 
 typedef struct msg_proc_t
@@ -203,12 +215,6 @@ typedef struct shutdown_state_t
 	uint32_t curr_tick;
 	uint8_t req_msg_send;
 }shutdown_state;
-
-typedef struct charge_state_t
-{
-	uint8_t charge_old_state;
-	uint8_t charge_new_state;
-}charge_state;
 
 typedef struct mcu_req_timeout_t
 {
@@ -265,9 +271,27 @@ void endian_conved_func(void *value, uint8_t type);
 int is_little_endian(void);
 void endian_conved_func(void *value, uint8_t type);
 void mcu_send_msg_flow(uart_msg *active_msg);
+void shutdown_func_from_soc(void);
+void self_check_pro_flow(void);
+void turnoff_soc_func(void);
+void turnon_soc_func(void);
+void heartbeat_timeout_func(void);
+void mcu_send_log_flow(mcu_log *log, char *log_content);
+void power_manager_func(void);
+void no_charge_func(void);
+void mcu_send_readymsg_func(void);
+void shutdown_func_from_button(void);
+void get_battery_info_func(void);
+
 
 extern heartbeat_pro heartbeat_value;
 extern soc_power_num global_soc_power_num;
+extern uint16_t myheartbeat_timeout_cnt;
+extern uint8_t switch_en_flag_12v;
+extern uint16_t REAL_VALUE;
+extern uint8_t a_system_startup_flag;
+extern uint8_t b_system_startup_flag;
+
 
 #endif
 

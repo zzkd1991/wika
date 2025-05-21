@@ -1,6 +1,8 @@
 #include "interflash.h"
 #include <string.h>
 
+
+
 uint8_t flash_write_bytes(uint8_t *buff, uint32_t addr, uint32_t size)
 {
 	uint32_t ki;
@@ -44,18 +46,15 @@ static uint32_t GetPage(uint32_t Addr)
 
 uint8_t erase_flash(uint32_t flash_start_addr, uint32_t length)
 {
-	uint32_t flashdestination;
 	uint32_t filesize;
 	FLASH_EraseInitTypeDef EraseInitStruct;
-	uint32_t Address = 0, PAGEError = 0;
+	uint32_t PAGEError = 0;
 
 	filesize = length;
 	if(flash_start_addr + filesize >= 0x8040000)
 	{
 		return 1;
 	}
-
-	flashdestination = flash_start_addr;
 
 	HAL_FLASH_Unlock();
 

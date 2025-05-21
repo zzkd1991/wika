@@ -66,8 +66,6 @@ uint16_t ADC_FINAL;
 uint16_t REAL_VALUE;
 MOVING_AVERAGE_FILTERtyp adc1_filter = {0};
 
-uint16_t match_succ = 0;
-
 struct ds278x_info my_info = {0};
 uint8_t key_value = 0;
 int quick_charge_ret = 0;
@@ -138,10 +136,8 @@ uint8_t charge_mode = 0;
 uint8_t c_no_load = 0;
 uint8_t charge_or_nocharge_mode = 0xff;
 
-system_status sys_stat = {0};
 mode_status mode_stat = {0};
 c_no_load_status load_value = {0};
-uint8_t my_flag = 0;
 uint8_t temp_value;
 int sw6301_write_regs(uint8_t port, uint8_t reg, uint8_t *data, uint16_t data_size);
 
@@ -169,7 +165,6 @@ float real_port_curr = 0;
 float real_battery_curr = 0;
 uint8_t reg43_value = 0;
 uint8_t reg44_value = 0;
-extern charge_state chargestate;
 extern mcu_req_timeout mcu_timeout;
 extern uint8_t interflash_ret1;
 int rtc_ret;
@@ -177,322 +172,170 @@ int rtc_ret;
 struct ds278x_info my_2782_info;
 int my_temp_value;
 
-struct rtc_time time_value = {.tm_sec = 10, .tm_min = 20, .tm_hour = 5, .tm_mday = 2};
+struct rtc_time time_value = {.tm_sec = 10, .tm_min = 20, .tm_hour = 5, .tm_mday = 2, .tm_mon = 10, .tm_year = 2015};
 struct rtc_wkalrm time_alarm_value1 = {.time.tm_sec = 20, .time.tm_min = 20, .time.tm_hour = 5, .time.tm_mday = 2};
 struct rtc_wkalrm time_alarm_value2 = {.time.tm_sec = 50, .time.tm_min = 20, .time.tm_hour = 5, .time.tm_mday = 2};
 struct rtc_time time_read_value = {0};
 extern uint8_t first_alarm;
-extern uint8_t notify_upgrade_flag;
-uart_msg msg_inst;
 short my_test_value;
 int my_test_size;
-uint8_t my_ret = 2;
-
-uint16_t heart_beat;
-uint16_t version_beat;
 uint16_t get_rtc_beat;
 uint16_t test_soc_system_beat;
-uint16_t soc_state_beat;
-uint16_t set_rtc_beat;
 struct rtc_datetime  my_rtc_time;
 uint8_t rtc_len;
 extern void bsp_update_jumptoapp_evt_cbk(void);
-
-uint32_t origin_value1 = 0x33445566;
-uint16_t origin_value2 = 0x7788;
-uint32_t conved_value1 = 0;
-uint16_t conved_value2 = 0;
+float ibat_curr_limt = 1000;
+uart_msg uart_msg_inst;
+extern __IO uint32_t uwTick;
+int time_ret = 0;
+uint8_t interflash_ret = 0;
+system_status sys_stat;
 
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  uint8_t ab_system_arr[4];
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
-
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	HAL_Init();
 
-  /* USER CODE BEGIN Init */
-	
-  /* USER CODE END Init */
+	/* USER CODE BEGIN Init */
 
-  /* Configure the system clock */
-  SystemClock_Config();
+	/* USER CODE END Init */
+
+	/* Configure the system clock */
+	SystemClock_Config();
 
 
-//	ibatµÁ¡˜1.5A
-//	≥‰µÁƒø±ÍµÁ—π
-//	8.4
-  /* USER CODE BEGIN SysInit */
+	//	ibatµÁ¡˜1.5A
+	//	≥‰µÁƒø±ÍµÁ—π
+	//	8.4
+	//ºÏ≤‚µΩœµÕ≥µÁ∫ÛΩ˚÷πtypec≥‰µÁπ¶ƒ‹
+	//≤‚ ‘œµÕ≥µÁø™∆Ùƒ‹∑ÒªΩ–—mcu
+	//ºÏ≤‚µΩœµÕ≥µÁµÕ”⁄18vΩ´12V_Switch_En¿≠∏ﬂ£¨‘⁄¿≠∏ﬂµƒπ˝≥Ã÷–£¨ºÏ≤‚µΩœµÕ≥µÁ∏ﬂ”⁄20VΩ´12V_Switch_En¿≠µÕ
+	/* USER CODE BEGIN SysInit */
 
-  /* USER CODE END SysInit */
+	/* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_LPUART1_UART_Init();
-  MX_ADC1_Init();
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_DMA_Init();
+	MX_LPUART1_UART_Init();
+	MX_ADC1_Init();
 
- // FLASH_If_Init();
-  /* USER CODE BEGIN 2 */
-	i2c_init(1);
-	i2c_init(2);
-	i2c_init(3);
+	// FLASH_If_Init();
+	/* USER CODE BEGIN 2 */
+	i2c_init(DS3232_PORT);
+	i2c_init(SW6301_PORT);
+	i2c_init(DS2782_PORT);
 	HAL_Delay(2000);
+	turnon_soc_func();
+	HAL_Delay(1000);	
 	API_WatchDog_Enable(0);
-	memset(&time_value, 0, sizeof(time_value));
-
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
-	HAL_Delay(1000);
 	//HAL_Delay(5000);
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
-  /* USER CODE END 2 */
+	/* USER CODE END 2 */
 	Init_Moving_Average_Filter();
 	__HAL_UART_ENABLE_IT(&hlpuart1, UART_IT_RXNE);
 	__HAL_UART_ENABLE(&hlpuart1);
 	if(1 == API_UART_RxFifoEnable(Uart_Recv_Fifo, UART_MSG_LEN))
-		return 1;
+	return 1;
 	Early_Filter_Flow();
-
-	
-	 endian_conved_func(&origin_value1, 1);
-	 endian_conved_func(&origin_value2, 0);
-	
-	//rtc_len = sizeof(my_rtc_time);
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-
-  //ds278x_get_status(&my_info);
-	//get_chip_version(uint8_t *version)
-	//rtc_set.tm_sec = 10;
-	//rtc_set.tm_min = 20;
-//ds3232_set_time(&rtc_set);
-	//sw6301_write_enable();
-//charge_or_nocharge_mode = 0xff;
-	//write_event_int.button_event =1;//0x25
-//	write_event_int.charge_abn_event = 1;//0x25
-//	write_event_int.discharge_abn_event = 1;//0x25
-	//low_power_disable_func();
-	
-	//discharge_config0 config_value = {0};
-	//config_value.output_power = 0;
-	//charge_config0 config_value1 = {0};
-	//config_value1.input_power = 0;
-	//discharge_config0_func(config_value);
-	//charge_config0_func(config_value1);
-	//force_value.force_i2c_output_power = 1;
-	//force_value.force_ibat_current = 1;
-	//force_value.force_contr_charge_vol = 1;
-	//force_control_func(force_value);
-
-	//ibat_value.dischg_ibat_limit = 15;
-	//set_output_ibat_value(ibat_value);
-
-	//set_charge_goal_vol(charge_goal_vol);
-	//set_charge_ibus_curr_limit_value(10);
-	
-	//set_charge_ibat_current_limit_value(10);
-
-	//set_discharge_ibat_current_limit_value(1000);
-	//set_discharge_ibus_curr_limit_value(1000);
-	
-	//__disable_irq();
-	//interflash_ret1 =  erase_flash(0x8010000, 0x10000);
-
- //erase_flash(APPLICATION_ADDRESS, 0x20000);
-	//__enable_irq();
-		//interflash_test();
-//HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
-//HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
-
-  //rtc_ret = ds3232_probe();
-  //if(rtc_ret != 0)
-  //{
-	//	LEDG_OFF;
-  //}
-  //else
-  //{
-	//	LEDG_ON;
-  //}
-
-  		//HAL_Delay(3000);
-		//ds3232_reset_flow();
-		//ds3232_probe();
-	//my_ret1 = ds3232_set_time(&time_value);
-	//time_alarm_value1.enabled = 1;
-	//my_ret2 = ds3232_set_alarm(&time_alarm_value1);
-	uint8_t ret;
-	
-	//my_ret = erase_flash(APPLICATION_ADDRESS, 0x20000);
-	//bsp_update_jumptoapp_evt_cbk();
-  while (1)
-  {  
+	/* Infinite loop */
+	/* USER CODE BEGIN WHILE */
+	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH);
+	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
+	rtc_ret = ds3232_probe();	
+	low_power_func(1);
+	FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, 4);
+	memcpy(&a_system_startup_flag, ab_system_arr, 2);
+	memcpy(&b_system_startup_flag, ab_system_arr + 2, 2);
+	while (1)
+	{  
 		//ds3232_read_time(&rct_read);
-    /* USER CODE END WHILE */
+	/* USER CODE END WHILE */
 		Get_Adc1_Average_Value();
 		ADC_Smooth();
 		//ds278x_get_status(&my_info);
 	//my_ret = ds2782_get_capacity(&my_capacity);
 	//if(my_ret)
 	//	return my_ret;		
-    /* USER CODE BEGIN 3 */
-		//my_ret1 = get_chip_version(&version);
-#if 1		
+	/* USER CODE BEGIN 3 */
+		my_ret1 = get_chip_version(&version);
+#if 0//here
 		my_ret3 = get_mode_status(&mode_stat);
-  //charge_mode = 0;
+	//charge_mode = 0;
 		my_ret2 = get_c_no_load_status(&load_value);
 		my_ret4 = get_system_status(&sys_stat);
 
 		my_ret10 = ds278x_get_status(&my_info);
-
-		//HAL_Delay(3000);
-		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);
-	//	HAL_Delay(3000);
-		//HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-		//HAL_Delay(3000);
+		//low_power_func(1);
 
 		//event_int_enable_func(write_event_int);
 		//my_ret6 = enable_write_low_register();
 		//mode_set_value.output_switch = 1;
 		//my_ret5 = mode_set_func(mode_set_value);
 		//uint8_t my_value = 0x18;
-		
-		//my_ret5 = sw6301_write_regs(2, 0x28, &my_value, 1);
 #endif
-#if 0
+#if 1
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBUS, &read_vbus_vol);
-				my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBAT, &read_vbat_vol);
-				sw6301_read_adc(SW6301_ADC_CHANNEL_IBUS, &read_ibus_curr);
-				
-		i2c_sw6301_read(0x10, (uint8_t *)&port_curr);
-		real_port_curr = port_curr * 50;
-		i2c_sw6301_read(0x11, (uint8_t *)&battery_curr);
-		real_battery_curr = battery_curr * 100;
-		i2c_sw6301_read(0x40, &reg40_value);
-		i2c_sw6301_read(0x43, &reg43_value);
-		i2c_sw6301_read(0x44, &reg44_value);
-//read_ibus_curr
-		my_flag++;
- #endif
+		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBAT, &read_vbat_vol);
+		sw6301_read_adc(SW6301_ADC_CHANNEL_IBUS, &read_ibus_curr);
+		quick_charge_indication(&quick_value);
+		//charge_switch_func(0);
+		set_charge_ibat_current_limit_value(ibat_curr_limt);
+		//i2c_sw6301_read(0x10, (uint8_t *)&port_curr);
+		//real_port_curr = port_curr * 50;
+		//i2c_sw6301_read(0x11, (uint8_t *)&battery_curr);
+		//real_battery_curr = battery_curr * 100;
+		//i2c_sw6301_read(0x40, &reg40_value);
+		//i2c_sw6301_read(0x43, &reg43_value);
+		//i2c_sw6301_read(0x44, &reg44_value);
+	//read_ibus_curr
+#endif
 
 #if 1
-	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
-	{
-		//Êñ≠Áîµ/‰∏äÁîµÈáçÂêØÂºÄÂèëÊùø
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//ÂÖ≥Êú∫
-		global_soc_power_num.off_num += 1;
-		HAL_Delay(50);
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//ÂºÄÊú∫
-		global_soc_power_num.on_num += 1;
-	}
-	
-	uart_msg_proc_flow();
-	ret = get_system_status(&sys_stat);
-	if(ret == 0)
-	{
-		if(sys_stat.discharge_status == 1)
-		{
-			chargestate.charge_new_state = 1;
-			//chargestate.charge_old_state = 1;
-			if(chargestate.charge_new_state != chargestate.charge_old_state)
-			{
-				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
-				mcu_send_msg_flow(&msg_inst);
-				chargestate.charge_old_state = 1;
-			}
-		}
-		else if(sys_stat.discharge_status == 0)
-		{
-			chargestate.charge_new_state = 0;
-			if(chargestate.charge_new_state != chargestate.charge_old_state)
-			{
-				//msg_inst.msg_id = CMD_REQ_BAT_DISCHARGE_STATE;
-				mcu_send_msg_flow(&msg_inst);		
-				chargestate.charge_old_state = 0;
-			}
-		}
-	}
-
-	if(REAL_VALUE < 18)
-	{
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);//ÂÖ≥Êú∫
-		global_soc_power_num.off_num += 1;
-	}
-
-	if(REAL_VALUE > 20)
-	{
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-	}
-
-	if(notify_upgrade_flag == 1)
-	{	
-		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
-		mcu_send_msg_flow(&msg_inst);
-		notify_upgrade_flag = 0;
-	}
-
-	/*if(mcu_timeout.timeout_udp_ready_flag == 1)
-	{
-		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
-		mcu_send_msg_flow(&msg_inst);
-		mcu_timeout.timeout_udp_ready_flag = 0;
-	}*/
-
-	API_WatchDog_FeedDog();
+		heartbeat_timeout_func();
+		get_system_status(&sys_stat);
+		no_charge_func();
+		mcu_send_readymsg_func();
+		power_manager_func();
+		API_WatchDog_FeedDog();
 #endif
-	//key_value = HAL_GPIO_ReadPin(KEY_GPIO_PORT, KEY_PIN);
-//API_WatchDog_FeedDog();
-	//	my_ret1 = ds3232_set_time(&time_value);
+		LEDG_ON;
+		//HAL_Delay(5000);
 
-	//HAL_Delay(1000);
-	//my_ret4 = ds3232_read_time(&time_read_value);
-	//LEDG_ON;
-	//if(first_alarm == 1)
-	//{
-	//	time_alarm_value2.enabled = 1;
-	//	my_ret2 = ds3232_set_alarm(&time_alarm_value2);
-	//}
-	//if(Key_Scan() == 1)
-	//{
-		//LEDG_ON;
-	//}
-	//else
-	//{
-	//	LEDG_OFF;
-	//}
-	
-	//HAL_Delay(10000);
-	
-	//while(1)
-	//{
-	//	if(Key_Scan() == 1)
-	//	{
-	//		API_EnteryStandby();
-	//	}
-	//}
-	
-	//API_EnteryStandby();
+		//while(1)
+		//{
+		//	if(Key_Scan() == 1)
+		//	{
+		//		API_EnteryStandby();
+		//	}
+		//}
 		
-//LEDG_ON;
-//HAL_Delay(1000);
-//LEDG_OFF;
-//HAL_Delay(1000);
-#if 0
- ds278x_get_status(&my_2782_info);
- ds278x_get_temp(&my_temp_value);
- ds2782_get_capacity(&my_capacity);
-		my_ret4 = get_system_status(&sys_stat);
- my_test_size = sizeof(my_test_value);
- quick_charge_ret = quick_charge_indication(&quick_value);
- //my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
-#endif
 
-uart_msg_proc_flow();
-	
-}
+		//HAL_Delay(100);
+		//LEDG_OFF;
+		//HAL_Delay(100);
+		//API_EnteryStandby();
+#if 0
+	ds278x_get_status(&my_2782_info);
+	ds278x_get_temp(&my_temp_value);
+	ds2782_get_capacity(&my_capacity);
+		my_ret4 = get_system_status(&sys_stat);
+	my_test_size = sizeof(my_test_value);
+	quick_charge_ret = quick_charge_indication(&quick_value);
+	//my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
+#endif
+		uart_msg_proc_flow();
+		get_battery_info_func();
+		self_check_pro_flow();
+		shutdown_func_from_soc();
+		//shutdown_func_from_button();
+	}
   /* USER CODE END 3 */
 }
 

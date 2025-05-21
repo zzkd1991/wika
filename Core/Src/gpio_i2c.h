@@ -2,6 +2,13 @@
 #define _user_i2c_h_
 
 #include "main.h"
+
+enum port_type
+{
+	DS3232_PORT = 1,
+	SW6301_PORT = 2,
+	DS2782_PORT = 3,
+};
 							
 void i2c_init(uint8_t port);
 void i2c_start(uint8_t port);

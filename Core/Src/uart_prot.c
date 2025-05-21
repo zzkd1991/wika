@@ -5,6 +5,8 @@
 #include "interflash.h"
 #include "sw6301.h"
 #include "bsp_hwdg.h"
+#include "interflash_test.h"
+#include "button.h"
 #include <string.h>
 
 CircularQueue_Str Uart_Recv_Queue;
@@ -13,13 +15,13 @@ extern UART_HandleTypeDef hlpuart1;
 
 common_rep global_discharge_state;
 uint8_t msg_content[UART_MSG_LEN] = {0};
-msg_proc msgpro = {0};
+static msg_proc msgpro = {0};
 static uint8_t uart_content[UART_MSG_LEN];
-common_rep global_mcu_log;
-soc_sys_state soc_sys_state_ins;
-mcu_version mcu_version_ins = {0, 1};
-battery_info global_battery_info;
-mcu_self_check mcu_self_check_ins;
+static common_rep global_mcu_log;
+static common_rep global_selfcheck_ret;
+static mcu_version mcu_version_ins = {0, 1};
+static battery_info global_battery_info;
+mcu_self_check_ins self_check_ins = {0};
 soc_power_num global_soc_power_num;
 uint8_t log_fill[530];
 uint8_t actual_log_fill[512];
@@ -28,36 +30,28 @@ req_upgrade_mcu global_upgrade_mcu = {0};
 common_rep global_soc_ack = {0};
 mcu_upgrade_pack mcu_pack = {0};
 uint16_t last_pack_index = 0;
-uint8_t enter_upgrade_flow = 0;
-uint8_t crc_fail_num = 0;
 uint8_t update_percentage = 0;
 heartbeat_pro heartbeat_value = {0};
-shutdown_soc shutdown_value = {0};
 shutdown_state shutdown_state_value = {0};
-charge_state chargestate = {0};
 mcu_req_timeout mcu_timeout = {0};
 battery_state global_battery_state = {0};
 uint8_t notify_upgrade_flag = 0;
 uart_msg uart_msg_instance = {0};
-uint16_t pack_size_array[50] = {0};
-uint16_t pack_index_succ_array[50] = {0};
-uint16_t pack_index_fail_array[50] = {0};
-uint32_t write_index_array[50] = {0};
-uint16_t my_value = 0;
+uint32_t soc_shutdown_tick;
+uint8_t soc_shutdown_flag = 0;
+uint8_t soc_shutdown_heartbeat = 0;
+uint16_t myheartbeat_timeout_cnt = 0;
+uint8_t switch_en_flag_12v = 0;
+uint8_t a_system_startup_flag = 0;
+uint8_t b_system_startup_flag = 0;
 
 
 typedef void (*pFunction)(void);
 
-uint32_t flashdestination = APPLICATION_ADDRESS;
+uint32_t flashdestination;
 uint32_t write_index = 0;
 uint32_t JumpAddress;
 pFunction Jump_To_Application;
-
-uint16_t data_pack_num = 0;
-uint8_t enter_last_flow = 0;
-uint16_t flash_write_succ = 0;
-uint16_t flash_write_fail = 0;
-
 extern uint16_t match_succ;
 
 #define MSG_FIXED_SIZE	sizeof(common_rep)	
@@ -87,8 +81,6 @@ enum cmd_id_t cmd_id_array[34] =
 	CMD_REP_GET_SOC_POWER_NUM,//21
 	CMD_REQ_GET_RTC,//22
 	CMD_REP_GET_RTC,//23
-	//CMD_REQ_GET_MCU_GPIO_STATE	= MK_CMDID(3,7),
-	//CMD_REP_GET_MCU_GPIO_STATE = MK_CMDID(3,8),
 	CMD_REQ_GET_BAT_INFO,//24
 	CMD_REP_GET_BAT_INFO,//25
 	CMD_REQ_HEARTBEAT,//26
@@ -147,18 +139,59 @@ void endian_conved_func(void *value, uint8_t type)
 }
 
 
-void shutdown_soc_func(uint8_t shutdown)
+void turnoff_soc_func(void)
+{
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
+}
+
+void turnon_soc_func(void)
+{
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
+}
+
+void heartbeat_timeout_func(void)
+{
+	if(soc_shutdown_heartbeat == 1)
+		return;
+	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 9000)
+	{
+		myheartbeat_timeout_cnt++;
+		heartbeat_value.last_tick_value = HAL_GetTick();
+		//断电/上电重启开发板
+		turnoff_soc_func();
+		global_soc_power_num.off_num += 1;
+		HAL_Delay(50);
+		turnon_soc_func();
+		global_soc_power_num.on_num += 1;
+	}
+}
+
+void shutdown_func_from_soc(void)
+{
+	if(soc_shutdown_flag == 1)
+	{
+		if(HAL_GetTick() - soc_shutdown_tick >= 3000)
+		{
+			soc_shutdown_flag = 0;
+			turnoff_soc_func();
+		}
+	}
+}
+
+static void shutdown_func(uint8_t shutdown)//按键检测函数中调用
 {
 	uart_msg msg_inst;
+	shutdown_soc shutdown_value;	
 	if(shutdown == 1)
 	{
 		shutdown_value.shutdown = 1;
 		msg_inst.msg_id = CMD_REQ_SHUTDOWN_SOC;
+		msg_inst.uart_msg_data.msg_ptr = &shutdown_value;
 		mcu_send_msg_flow(&msg_inst);
 		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 3000)
 		{
 			//关机
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);
+			turnoff_soc_func();
 			memset(&shutdown_value, 0, sizeof(shutdown_value));
 			global_soc_power_num.off_num += 1;
 		}
@@ -167,34 +200,86 @@ void shutdown_soc_func(uint8_t shutdown)
 	{
 		shutdown_value.shutdown = 2;
 		msg_inst.msg_id = CMD_REQ_SHUTDOWN_SOC;
+		msg_inst.uart_msg_data.msg_ptr = &shutdown_value;
 		if(shutdown_state_value.req_msg_send )
 		mcu_send_msg_flow(&msg_inst);
 		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 3000)
 		{
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
+			turnoff_soc_func();
+			shutdown_state_value.curr_tick = HAL_GetTick();
 			global_soc_power_num.off_num += 1;
 		}
 
 		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 5000)
 		{
-			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);//开机
+			turnon_soc_func();
+			shutdown_state_value.curr_tick = HAL_GetTick();
 			memset(&shutdown_state_value, 0, sizeof(shutdown_state_value));
 			global_soc_power_num.on_num += 1;
 		}
 	}
+}
+
+void shutdown_func_from_button(void)
+{
+	if(Key_Scan() == 1)
+	{
+		shutdown_func(1);
+	}	
+}
+
+void power_manager_func(void)
+{
+	if(soc_shutdown_heartbeat == 1)
+		return;
+	if(REAL_VALUE < 18)
+	{
+		turnon_soc_func();
+		switch_en_flag_12v = 1;
+	}
+
+	if(switch_en_flag_12v == 1)
+	{
+		if(REAL_VALUE > 20)
+		{
+			turnoff_soc_func();
+		}
+		switch_en_flag_12v = 0;
+	}
+}
+
+void no_charge_func(void)
+{
+	if(REAL_VALUE >= 18 && REAL_VALUE <= 20)
+	{
+		charge_switch_func(0);
+	}
 
 }
 
-
 void JumpToApplication(void)
 {
-	if(((*(__IO uint32_t *)APPLICATION_ADDRESS) & 0x2FFE0000) == 0x20000000)
+	if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
 	{
-		JumpAddress = *(__IO uint32_t *)(APPLICATION_ADDRESS + 4);
-		Jump_To_Application = (pFunction) JumpAddress;
-
-		__set_MSP(*(__IO uint32_t*)APPLICATION_ADDRESS);
-		Jump_To_Application();
+		if(((*(__IO uint32_t *)A_SYSTEM_APPLICATION_ADDRESS) & 0x2FFE0000) == 0x20000000)
+		{
+			JumpAddress = *(__IO uint32_t *)(A_SYSTEM_APPLICATION_ADDRESS + 4);
+			Jump_To_Application = (pFunction) JumpAddress;
+		
+			__set_MSP(*(__IO uint32_t*)A_SYSTEM_APPLICATION_ADDRESS);
+			Jump_To_Application();
+		}
+	}
+	else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
+	{
+		if(((*(__IO uint32_t *)B_SYSTEM_APPLICATION_ADDRESS) & 0x2FFE0000) == 0x20000000)
+		{
+			JumpAddress = *(__IO uint32_t *)(B_SYSTEM_APPLICATION_ADDRESS + 4);
+			Jump_To_Application = (pFunction) JumpAddress;
+		
+			__set_MSP(*(__IO uint32_t*)B_SYSTEM_APPLICATION_ADDRESS);
+			Jump_To_Application();
+		}
 	}
 }
 
@@ -203,15 +288,15 @@ void bsp_update_jumptoapp_evt_cbk(void)
 	int i;
 	HAL_DeInit();
 	__disable_irq();
-			for(i = 0; i < 8; i++)
-		{
-			NVIC->ICER[i] = 0xFFFFFFFF;
-			NVIC->ICPR[i] = 0xFFFFFFFF;
-		}
-		HAL_RCC_DeInit();
-		SysTick->CTRL = 0;
-		SysTick->LOAD = 0;
-		SysTick->VAL = 0;
+	for(i = 0; i < 8; i++)
+	{
+		NVIC->ICER[i] = 0xFFFFFFFF;
+		NVIC->ICPR[i] = 0xFFFFFFFF;
+	}
+	HAL_RCC_DeInit();
+	SysTick->CTRL = 0;
+	SysTick->LOAD = 0;
+	SysTick->VAL = 0;
 	JumpToApplication();
 	//bsp_Update_No_Application();
 }
@@ -276,15 +361,6 @@ void fill_msg(fill_msg_flag *msg_flag)
 	}
 }
 
-
-extern uint16_t heart_beat;
-extern uint16_t version_beat;
-extern uint16_t get_rtc_beat;
-extern uint16_t test_soc_system_beat;
-extern uint16_t soc_state_beat;
-extern uint16_t set_rtc_beat;
-
-
 void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 {
 	uint16_t msg_id;
@@ -300,39 +376,40 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 			msg_flag.msg_id = CMD_REP_HEARTBEAT;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			heart_beat++;
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_SOC_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_SOC_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			soc_state_beat++;
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_GET_MCU_VER:
 			msg_flag.msg_id = CMD_REP_GET_MCU_VER;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(mcu_version);
 			fill_msg(&msg_flag);
-			version_beat++;
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_GET_SOC_POWER_NUM:
 			msg_flag.msg_id = CMD_REP_GET_SOC_POWER_NUM;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(global_soc_power_num);
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_GET_RTC:
 			msg_flag.msg_id = CMD_REP_GET_RTC;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(struct rtc_datetime);
 			fill_msg(&msg_flag);
-			get_rtc_beat++;
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_SET_RTC://fixed_msg
 			msg_flag.msg_id = CMD_REP_SET_RTC;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			set_rtc_beat++;
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_MCU_CHARGE_CTRL://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_CHARGE_CTRL;
@@ -347,35 +424,38 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 				notify_upgrade_flag	= 1;
 			}
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_UPLOAD_MCU_FW://fixed_msg
 			msg_flag.msg_id = CMD_REP_UPLOAD_MCU_FW;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_MCU_UPD_STATE:
 			msg_flag.msg_id = CMD_REP_MCU_UPD_STATE;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(upgrade_state);
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
 			break;
 		case CMD_REQ_BAT_CHARGE_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_BAT_CHARGE_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		case CMD_REQ_MCU_SELF_CHECK://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_SELF_CHECK;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 			break;
 		default:
-			fill_msg(&msg_flag);
-			msg_flag.msg_total_len = 0;
+			//fill_msg(&msg_flag);
+			//msg_flag.msg_total_len = 0;
 			break;
 	}
-
-	HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
 }
 
 uint8_t API_UART_RxFifoEnable(uint8_t *rx_data, uint16_t length)
@@ -386,24 +466,110 @@ uint8_t API_UART_RxFifoEnable(uint8_t *rx_data, uint16_t length)
 	return 0;
 }
 
-int board_slef_check_func(mcu_self_check self_check_value)
+void board_self_check_func(mcu_self_check_ins self_check_value, mcu_self_check_ret *self_check_ret)
 {
-	int ret = EC_OK;
-	if(self_check_value.mod == MCU_MOD_ALL)
+	int ret = EC_OK;	
+ 	chip_version version = {0};
+	memset((void *)&self_check_ret->result, 0, sizeof(self_check_ret->result));
+	if(self_check_value.inst.mod == MCU_MOD_ALL)
+	{
+		ret = interflash_test();
+		if(ret != 0)
+		{
+			self_check_ret->result |= MCU_MOD_FLASH;
+		}
+
+		
+	 	ret = get_chip_version(&version);
+		if(!((ret == 0) && (version.verion == 0x02)))
+		{
+			self_check_ret->result |= MCU_MOD_BATTERY;
+		}
+
+		self_check_ret->mod |= (MCU_MOD_FLASH | MCU_MOD_BATTERY);
+	}
+	else if(self_check_value.inst.mod == MCU_MOD_FLASH)
+	{
+		ret = interflash_test();
+		if(ret != 0)
+		{
+			self_check_ret->result |= MCU_MOD_FLASH;
+		}
+		self_check_ret->mod = MCU_MOD_FLASH;
+	}
+	else if(self_check_value.inst.mod == MCU_MOD_BATTERY)
 	{
 		
+	 	ret = get_chip_version(&version);
+		if(!((ret == 0) && (version.verion == 0x02)))
+		{
+			self_check_ret->result |= MCU_MOD_BATTERY;
+		}
+		self_check_ret->mod = MCU_MOD_BATTERY;
 	}
-	else if(self_check_value.mod == MCU_MOD_FLASH)
-	{
-
-	}
-	else if(self_check_value.mod == MCU_MOD_BATTERY)
-	{
-
-	}
-
-	return ret;
 }
+
+
+void self_check_pro_flow(void)
+{
+	uart_msg uart_msg_temp;
+	mcu_self_check_ret self_check_ret_ins;
+	if(self_check_ins.self_check_flow_flag == 1)
+	{
+		uart_msg_temp.msg_id = CMD_REQ_MCU_SELF_CHECK_RES;
+		memset(&self_check_ret_ins, 0, sizeof(self_check_ret_ins));
+		board_self_check_func(self_check_ins, &self_check_ret_ins);
+		if(is_little_endian())
+		{
+			endian_conved_func((void *)&self_check_ret_ins.mod, 1);
+			endian_conved_func((void *)&self_check_ret_ins.result, 1);
+		}
+		uart_msg_temp.uart_msg_data.msg_ptr = &self_check_ret_ins;
+		uart_msg_temp.ret = EC_OK;
+		mcu_send_msg_flow(&uart_msg_temp);
+		self_check_ins.self_check_flow_flag = 0;
+	}
+}
+
+void mcu_send_log_flow(mcu_log *log, char *log_content)
+{
+	uart_msg uart_msg_tmp;
+	uart_msg_tmp.uart_msg_data.msg_ptr = log;
+	uart_msg_tmp.msg_id = CMD_REQ_MCU_LOG;
+	memcpy(actual_log_fill, log_content, log->size);
+	mcu_send_msg_flow(&uart_msg_tmp);
+}
+
+void mcu_send_readymsg_func(void)
+{
+	uart_msg msg_inst;
+
+	if(notify_upgrade_flag == 1)
+	{	
+		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
+		mcu_send_msg_flow(&msg_inst);
+		notify_upgrade_flag = 0;
+	}
+	if(mcu_timeout.timeout_udp_ready_flag == 1)
+	{
+		msg_inst.msg_id = CMD_REQ_MCU_UPD_READY;
+		mcu_send_msg_flow(&msg_inst);
+		mcu_timeout.timeout_udp_ready_flag = 0;
+	}
+}
+
+void get_battery_info_func(void)
+{
+	uart_msg uart_msg_tmp;
+	static uint32_t cur_time = 3000;
+	uart_msg_tmp.msg_id = CMD_REQ_GET_BAT_INFO;
+	if(uwTick >= cur_time)
+	{
+		cur_time += 3000;
+		mcu_send_msg_flow(&uart_msg_tmp);
+	}
+}
+
 
 uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 {
@@ -417,6 +583,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 	uart_msg jump_uart_msg;
 	uint16_t pack_index;
 	mcu_self_check self_check_value;
+	soc_sys_state soc_sys_state_ins;	
 	void *my_ptr;
 	
 	switch(msg_id)
@@ -424,6 +591,17 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 		case CMD_REQ_SOC_STATE:
 			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr + MSG_FIXED_SIZE;
 			memcpy(&soc_sys_state_ins, my_ptr, sizeof(soc_sys_state_ins));
+			if(soc_sys_state_ins.state == 1)
+			{
+				global_soc_power_num.off_num +=1;
+				soc_shutdown_tick = HAL_GetTick();
+				soc_shutdown_flag = 1;
+				soc_shutdown_heartbeat = 1;
+			}
+			else if(soc_sys_state_ins.state == 2)
+			{
+				global_soc_power_num.on_num += 1;
+			}
 			ret = EC_OK;
 			break;
 		case CMD_REQ_SET_RTC:
@@ -438,7 +616,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			rtc_time.tm_hour = rtc_datetime.hour;
 			rtc_time.tm_mday = rtc_datetime.day;
 			rtc_time.tm_mon = rtc_datetime.month;
-			rtc_time.tm_year = rtc_datetime.year;
+			rtc_time.tm_year = rtc_datetime.year - 1900;
 			ret = ds3232_set_time(&rtc_time);
 			if(ret == 0)
 				ret = EC_OK;
@@ -446,12 +624,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				ret = EC_FAIL;
 			break;
 		case CMD_REQ_GET_RTC:
-			//ret = ds3232_read_time(&rtc_time);
-			ret = 0;
-			rtc_time.tm_hour = 9;
-			rtc_time.tm_mday = 4;
-			rtc_time.tm_mon = 5;
-			rtc_time.tm_yday = 2025;
+			ret = ds3232_read_time(&rtc_time);
 			if(ret == 0)
 			{
 				rtc_datetime.second = rtc_time.tm_sec;
@@ -459,11 +632,11 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				rtc_datetime.hour = rtc_time.tm_hour;
 				rtc_datetime.day = rtc_time.tm_mday;
 				rtc_datetime.month = rtc_time.tm_mon;
-				rtc_datetime.year = rtc_time.tm_year;
+				rtc_datetime.year = rtc_time.tm_year + 1900;
 				if(is_little_endian())
 				{
 					endian_conved_func((void *)&rtc_datetime.year, 0);
-				}				
+				}
 				memcpy(msg_ptr->uart_msg_data.msg_ptr, &rtc_datetime, sizeof(rtc_datetime));			
 				ret = EC_OK;
 			}
@@ -486,7 +659,8 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			ret = EC_OK;
 			break;
 		case CMD_REP_GET_BAT_INFO:
-			memcpy(&global_battery_info, msg_ptr->uart_msg_data.msg_ptr, sizeof(global_battery_info));
+			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr + MSG_FIXED_SIZE;			
+			memcpy(&global_battery_info, my_ptr, sizeof(global_battery_info));
 			ret = EC_OK;
 			mcu_timeout.soc_ack_get_bat_info_flag = 1;
 			break;
@@ -530,13 +704,11 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				endian_conved_func((void *)&global_soc_ack.errcode, 0);
 			}
 			mcu_timeout.soc_ack_udp_ready_flag = 1;
-			enter_upgrade_flow = 1;
 			break;
 		case CMD_REP_SHUTDOWN_SOC:
 			mcu_timeout.soc_ack_shutdown_info_flag = 1;
 			break;
 		case CMD_REQ_UPLOAD_MCU_FW:
-			data_pack_num++;
 			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr + MSG_FIXED_SIZE;
 			memcpy((void *)&mcu_pack.index, my_ptr, 2);
 			if(is_little_endian())
@@ -545,7 +717,6 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			}
 			last_pack = mcu_pack.index >> 15;
 			pack_index = mcu_pack.index & 0x7FFF;
-			//index_array[my_value] = mcu_pack.index;
 			if((pack_index != (last_pack_index + 1)) && (pack_index != 0))
 			{
 				ret = EC_FAIL;
@@ -558,18 +729,19 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				endian_conved_func((void *)&mcu_pack.size, 0);
 			}
 			my_ptr = (uint8_t *)(msg_ptr->uart_msg_data.msg_ptr) + 6;
-			if(crc_fail_num != 0)
-			{
-				crc_fail_num = 0;
-			}
 			memcpy(upgrade_pack, my_ptr, mcu_pack.size);
 			//写flash流程
+			if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
+			{
+				flashdestination = A_SYSTEM_APPLICATION_ADDRESS;
+			}
+			else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
+			{
+				flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
+			}
 			ret = flash_write_bytes(upgrade_pack, flashdestination + write_index, mcu_pack.size);
-			write_index_array[my_value++] = write_index;
 			if(ret != 0)
 			{
-				flash_write_fail++;
-				pack_index_fail_array[flash_write_fail] = pack_index;
 				ret = EC_FAIL;
 				return ret;
 			}
@@ -577,8 +749,6 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			{
 				last_pack_index = pack_index;
 				write_index += mcu_pack.size;
-				pack_index_succ_array[flash_write_succ] = write_index;
-				flash_write_succ++;
 				update_percentage = write_index * 100 / global_upgrade_mcu.filesize;
 				ret = EC_OK;
 			}
@@ -587,12 +757,10 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			{
 				if(write_index != global_upgrade_mcu.filesize)
 				{
-					enter_last_flow = 0xff;
 					ret = EC_FAIL;
 				}
 				else//跳转流程
 				{
-					enter_last_flow = 1;
 					memset(&jump_uart_msg, 0, sizeof(jump_uart_msg));					
 					ret = EC_OK;
 					jump_uart_msg.msg_id = CMD_REQ_UPLOAD_MCU_FW;
@@ -620,16 +788,18 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			{
 				endian_conved_func((void *)&self_check_value.mod, 1);
 			}
-			ret = board_slef_check_func(self_check_value);
-			if(ret != 0)
-			{
-				ret = EC_FAIL;
-			}
-			else
-			{
-				ret = EC_OK;
-			}
+			memcpy((void *)&self_check_ins.inst, (void *)&self_check_value, sizeof(self_check_value));
+			self_check_ins.self_check_flow_flag = 1;			
+			ret = EC_OK;
 			break;
+		case CMD_REP_MCU_SELF_CHECK_RES:
+			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr;
+			memcpy(&global_selfcheck_ret, my_ptr, sizeof(global_selfcheck_ret));
+			if(is_little_endian())
+			{
+				endian_conved_func((void *)&global_selfcheck_ret.errcode, 0);
+			}
+			ret = EC_OK;			
 		default:
 			ret = EC_FAIL;
 			break;
@@ -656,17 +826,6 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 
 	switch(active_msg->msg_id)
 	{
-		/*case CMD_REQ_BAT_DISCHARGE_STATE:
-			discharge_state.state = 1;
-			msg_flag.msg_id = active_msg->msg_id;
-			msg_flag.errcode = 0;
-			msg_flag.msg_content = &discharge_state;
-			msg_flag.msg_len = sizeof(discharge_state);
-			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
-			mcu_timeout.mcu_req_bat_discharge_tick = HAL_GetTick();
-			mcu_timeout.mcu_req_bat_discharge_flag = 1;
-			break;*/
 		case CMD_REQ_MCU_LOG:
 			log_ptr = (mcu_log *)(active_msg->uart_msg_data.msg_ptr);
 			log_size = log_ptr->size;
@@ -691,6 +850,14 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			mcu_timeout.mcu_req_get_bat_info_tick = HAL_GetTick();
 			mcu_timeout.mcu_req_get_bat_info_flag = 1;
 			break;
+		case CMD_REQ_MCU_SELF_CHECK_RES:
+			msg_flag.msg_id = active_msg->msg_id;
+			msg_flag.errcode = active_msg->ret;
+			msg_flag.msg_len = sizeof(mcu_self_check_ret);
+			msg_flag.msg_content = active_msg->uart_msg_data.msg_ptr;
+			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			break;
 		case CMD_REQ_SHUTDOWN_SOC:
 			if(shutdown_state_value.req_msg_send == 0)
 			{
@@ -710,7 +877,15 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			msg_flag.msg_id = active_msg->msg_id;
 			API_WatchDog_FeedDog();
 	//擦除FLASH流程
-			ret = erase_flash(APPLICATION_ADDRESS, 0x20000);
+			if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
+			{
+				ret = erase_flash(A_SYSTEM_APPLICATION_ADDRESS, 0x10000);
+			}
+			else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
+			{
+				ret = erase_flash(B_SYSTEM_APPLICATION_ADDRESS, 0x10000);
+			}
+			
 			if(ret != 0)
 			{
 				msg_flag.errcode = EC_FAIL;
@@ -737,10 +912,11 @@ uint8_t uart_msg_proc_flow(void)
 	uint8_t recv_data;
 	int32_t ret;
 	uint16_t calc_crc;
-//	battery_discharge_state discharge_state;
-	int errcode;
 	uint8_t msg_tail_hi;
 	uint8_t msg_tail_lo;
+	uint32_t cur_tick;
+
+	cur_tick = HAL_GetTick();
 
 	while(1)
 	{
@@ -781,7 +957,6 @@ uint8_t uart_msg_proc_flow(void)
 						{
 							uart_msg_instance.uart_msg_data.msg_ptr = &msg_content[6];
 							uart_msg_dispatch(&uart_msg_instance);
-							match_succ++;
 							msgpro.total_index = 0;
 							msgpro.pre_very = 0;
 							break;
@@ -807,6 +982,11 @@ uint8_t uart_msg_proc_flow(void)
 				memmove(msg_content, &msg_content[1], msgpro.total_index);
 				msgpro.pre_very = 0;
 			}
+		}
+
+		if(HAL_GetTick() - cur_tick >= 1000)
+		{
+			return 0;
 		}
 	}
 

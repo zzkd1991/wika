@@ -4,8 +4,6 @@
 
 #define SW6301_SLAVE_ADDRESS		0x78
 
-uint8_t write_low_reg = 1;
-
 force_control global_force_control = {0};
 mode_set mode_set_value = {0};
 
@@ -93,12 +91,10 @@ cmd_fail:
 	return 1;
 }
 
-int sw6301_write(uint16_t reg, uint8_t *value)
+static int sw6301_unlock(void)
 {
-	uint8_t write_value;
-	uint8_t real_reg;
 	int ret;
-
+	uint8_t write_value;
 	write_value = 0x20;
 	ret = i2c_sw6301_write(0x24, &write_value);
 	if(ret)
@@ -111,50 +107,67 @@ int sw6301_write(uint16_t reg, uint8_t *value)
 	ret = i2c_sw6301_write(0x24, &write_value);
 	if(ret)
 		return ret;
+	
+	return 0;
+}
+
+static int sw6301_lock(void)
+{
+	int ret;
+	uint8_t data = 0;
+
+	ret = sw6301_write_regs(2, 0x24, &data, 1);
+	return ret;
+}
+
+int sw6301_switch_high_reg(void)
+{
+	uint8_t write_value;
+	int ret;
+
+	write_value = 0x81;
+	ret = i2c_sw6301_write(0x24, &write_value);
+	return ret;
+}
+
+int sw6301_switch_low_reg(void)
+{
+	uint8_t write_value = 0;
+	int ret;
+
+	ret = i2c_sw6301_write(0xff, &write_value);
+	return ret;
+}
+
+int sw6301_write(uint16_t reg, uint8_t *value)
+{
+	uint8_t real_reg;
+	int ret;
+
+	sw6301_unlock();
 
 	if(reg >= 0x100 && reg <= 0x156)
 	{
-		if(write_low_reg == 1)
-		{
-			write_value = 0x81;
-			ret = i2c_sw6301_write(0x24, &write_value);
-			if(ret)
-				return ret;
-			real_reg = reg - 0x100;
-			ret = i2c_sw6301_write(0x24, &real_reg);
-			if(ret)
-				return ret;
-		}
-		else if(write_low_reg == 0)
-		{
-			real_reg = reg - 0x100;
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		write_low_reg = 1;
+		ret = sw6301_switch_high_reg();
+		if(ret)
+			goto lock_flow;
+		real_reg = reg - 0x100;
+		ret = i2c_sw6301_write(0x24, &real_reg);
+		if(ret)
+			goto lock_flow;
 	}
 	else if(reg < 0x100)
 	{
-		if(write_low_reg == 1)
-		{
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		else if(write_low_reg == 0)
-		{
-			write_value = 0x00;
-			ret = i2c_sw6301_write(0xff, &write_value);
-			if(ret)
-				return ret;
-			ret = i2c_sw6301_write(reg, value);
-			if(ret)
-				return ret;
-		}
-		write_low_reg = 1;
+		ret = sw6301_switch_low_reg();
+		if(ret)
+			goto lock_flow;
+		ret = i2c_sw6301_write(reg, value);
+		if(ret)
+			goto lock_flow;
 	}
 
+lock_flow:
+	sw6301_lock();
 	return ret;
 }
 
