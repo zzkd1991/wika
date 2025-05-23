@@ -11,6 +11,8 @@
 
 #define MY_MD5_SIZE		16
 #define MY_MD5_READ_DATA_SIZE 512
+#define MY_MD5_STR_LEN (MY_MD5_SIZE * 2)
+
 
 
 #define MK_CMDID(t,id)		((((t)&0x0f) << 12) | (((id)&0xfff)))		
@@ -156,9 +158,9 @@ __packed typedef struct req_upgrade_mcu_t {
 }req_upgrade_mcu;
 
 __packed typedef struct bin_file_info_t {
-	uint8_t curr_partition;
+	uint8_t write_succ;
 	int32_t file_size;
-	uint8_t md5_value[MY_MD5_SIZE];
+	uint8_t md5_value[MY_MD5_STR_LEN];
 }bin_file_info;
 
 

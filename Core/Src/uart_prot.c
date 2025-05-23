@@ -46,7 +46,7 @@ uint8_t switch_en_flag_12v = 0;
 uint8_t ab_system_arr[512]MEM_ALIGNED(8) = {0};
 bin_file_info binfile = {0};
 
-
+uint8_t enter_cnt = 0;
 
 typedef void (*pFunction)(void);
 
@@ -259,42 +259,55 @@ void no_charge_func(void)
 
 }
 
-void file_md5_func(uint32_t flashaddr, uint8_t *md5value)
+int file_md5_func(uint8_t *md5_str)
 {
-	uint32_t flashaddr_tmp;
-	flashaddr_tmp = flashaddr;
-	char tmp_value[MY_MD5_READ_DATA_SIZE];
-	char md5_value[MY_MD5_SIZE];
+	uint8_t data[MD5_READ_DATA_SIZE];
+	unsigned char md5_value[MD5_SIZE];
+	int flashaddr;
+	int i;
+	flashaddr = B_SYSTEM_APPLICATION_ADDRESS;	
+	MD5_CTX md5;
+	
+	MD5Init(&md5);
 	while(global_upgrade_mcu.filesize > 0)
 	{
-		FLASH_If_Read(flashaddr_tmp, (uint8_t *)tmp_value, MY_MD5_READ_DATA_SIZE);
-		Compute_file_md5(tmp_value, md5_value, MY_MD5_READ_DATA_SIZE);
-		flashaddr_tmp += MY_MD5_READ_DATA_SIZE;
-		global_upgrade_mcu.filesize -= MY_MD5_READ_DATA_SIZE;
+		FLASH_If_Read(flashaddr, (uint8_t *)data, MD5_READ_DATA_SIZE);
+		MD5Update(&md5, data, MD5_READ_DATA_SIZE);
+		flashaddr += MD5_READ_DATA_SIZE;
+		global_upgrade_mcu.filesize -= MD5_READ_DATA_SIZE;
 	}
-
-	memcpy(md5value, md5_value, MY_MD5_SIZE);
+	
+	MD5Final(&md5, md5_value);
+	
+	for(i=0; i < MD5_SIZE; i++)
+	{
+		snprintf((char *)(md5_str + i*2), 2+1, "%02x", md5_value[i]);
+	}	
+	
+	md5_str[MD5_STR_LEN] = '\0';
+	
+	return 0;
 }
+
 
 void PreJumpToApplication(void)
 {
-	if(binfile.curr_partition == 1)//当前在A系统，向B系统跳转
+	uint8_t write_cnt = 3;
+	enter_cnt++;
+	while(write_cnt > 0)
 	{
 		erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
-		binfile.curr_partition = 0;
 		binfile.file_size = global_upgrade_mcu.filesize;
-		file_md5_func(B_SYSTEM_APPLICATION_ADDRESS, binfile.md5_value);
+		binfile.write_succ = 0x66;
+		file_md5_func(binfile.md5_value);
 		memcpy(ab_system_arr, &binfile, sizeof(binfile));
 		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
-	}
-	else if(binfile.curr_partition == 0)//当前在B系统，向A系统跳转
-	{
-		erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
-		binfile.curr_partition = 1;
-		binfile.file_size = global_upgrade_mcu.filesize;
-		file_md5_func(A_SYSTEM_APPLICATION_ADDRESS, binfile.md5_value);
-		memcpy(ab_system_arr, &binfile, sizeof(binfile));
-		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
+		FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, sizeof(ab_system_arr));
+		if(ab_system_arr[0] == binfile.write_succ);
+		{
+			break;
+		}
+		write_cnt--;
 	}
 }
 

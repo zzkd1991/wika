@@ -249,14 +249,9 @@ int main(void)
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH);
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 	rtc_ret = ds3232_probe();	
-	low_power_func(1);
-	FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, 4);
-	memcpy(&binfile.curr_partition, ab_system_arr, 1);
-	
+	low_power_func(1);	
 	flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
-	
-	if(!(binfile.curr_partition == 0 || binfile.curr_partition == 1))
-		return 1;
+	erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
 
 	while (1)
 	{  
@@ -342,7 +337,7 @@ int main(void)
 		get_battery_info_func();
 		//self_check_pro_flow();
 		shutdown_func_from_soc();
-		//shutdown_func_from_button();
+		shutdown_func_from_button();
 #endif		
 	}
   /* USER CODE END 3 */
