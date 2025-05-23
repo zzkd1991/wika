@@ -7,6 +7,7 @@
 #include "bsp_hwdg.h"
 #include "interflash_test.h"
 #include "button.h"
+#include "md5.h"
 #include <string.h>
 
 CircularQueue_Str Uart_Recv_Queue;
@@ -42,8 +43,9 @@ uint8_t soc_shutdown_flag = 0;
 uint8_t soc_shutdown_heartbeat = 0;
 uint16_t myheartbeat_timeout_cnt = 0;
 uint8_t switch_en_flag_12v = 0;
-uint8_t a_system_startup_flag = 0;
-uint8_t b_system_startup_flag = 0;
+uint8_t ab_system_arr[512]MEM_ALIGNED(8) = {0};
+bin_file_info binfile = {0};
+
 
 
 typedef void (*pFunction)(void);
@@ -257,35 +259,54 @@ void no_charge_func(void)
 
 }
 
+void file_md5_func(uint32_t flashaddr, uint8_t *md5value)
+{
+	uint32_t flashaddr_tmp;
+	flashaddr_tmp = flashaddr;
+	char tmp_value[MY_MD5_READ_DATA_SIZE];
+	char md5_value[MY_MD5_SIZE];
+	while(global_upgrade_mcu.filesize > 0)
+	{
+		FLASH_If_Read(flashaddr_tmp, (uint8_t *)tmp_value, MY_MD5_READ_DATA_SIZE);
+		Compute_file_md5(tmp_value, md5_value, MY_MD5_READ_DATA_SIZE);
+		flashaddr_tmp += MY_MD5_READ_DATA_SIZE;
+		global_upgrade_mcu.filesize -= MY_MD5_READ_DATA_SIZE;
+	}
+
+	memcpy(md5value, md5_value, MY_MD5_SIZE);
+}
+
+void PreJumpToApplication(void)
+{
+	if(binfile.curr_partition == 1)//当前在A系统，向B系统跳转
+	{
+		erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
+		binfile.curr_partition = 0;
+		binfile.file_size = global_upgrade_mcu.filesize;
+		file_md5_func(B_SYSTEM_APPLICATION_ADDRESS, binfile.md5_value);
+		memcpy(ab_system_arr, &binfile, sizeof(binfile));
+		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
+	}
+	else if(binfile.curr_partition == 0)//当前在B系统，向A系统跳转
+	{
+		erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
+		binfile.curr_partition = 1;
+		binfile.file_size = global_upgrade_mcu.filesize;
+		file_md5_func(A_SYSTEM_APPLICATION_ADDRESS, binfile.md5_value);
+		memcpy(ab_system_arr, &binfile, sizeof(binfile));
+		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
+	}
+}
+
 void JumpToApplication(void)
 {
-	if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
-	{
-		if(((*(__IO uint32_t *)A_SYSTEM_APPLICATION_ADDRESS) & 0x2FFE0000) == 0x20000000)
-		{
-			JumpAddress = *(__IO uint32_t *)(A_SYSTEM_APPLICATION_ADDRESS + 4);
-			Jump_To_Application = (pFunction) JumpAddress;
-		
-			__set_MSP(*(__IO uint32_t*)A_SYSTEM_APPLICATION_ADDRESS);
-			Jump_To_Application();
-		}
-	}
-	else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
-	{
-		if(((*(__IO uint32_t *)B_SYSTEM_APPLICATION_ADDRESS) & 0x2FFE0000) == 0x20000000)
-		{
-			JumpAddress = *(__IO uint32_t *)(B_SYSTEM_APPLICATION_ADDRESS + 4);
-			Jump_To_Application = (pFunction) JumpAddress;
-		
-			__set_MSP(*(__IO uint32_t*)B_SYSTEM_APPLICATION_ADDRESS);
-			Jump_To_Application();
-		}
-	}
+	NVIC_SystemReset();
 }
 
 void bsp_update_jumptoapp_evt_cbk(void)
 {
 	int i;
+	PreJumpToApplication();
 	HAL_DeInit();
 	__disable_irq();
 	for(i = 0; i < 8; i++)
@@ -376,40 +397,40 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 			msg_flag.msg_id = CMD_REP_HEARTBEAT;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SOC_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_SOC_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_MCU_VER:
 			msg_flag.msg_id = CMD_REP_GET_MCU_VER;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(mcu_version);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_SOC_POWER_NUM:
 			msg_flag.msg_id = CMD_REP_GET_SOC_POWER_NUM;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(global_soc_power_num);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_RTC:
 			msg_flag.msg_id = CMD_REP_GET_RTC;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(struct rtc_datetime);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SET_RTC://fixed_msg
 			msg_flag.msg_id = CMD_REP_SET_RTC;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_CHARGE_CTRL://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_CHARGE_CTRL;
@@ -424,32 +445,32 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 				notify_upgrade_flag	= 1;
 			}
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_UPLOAD_MCU_FW://fixed_msg
 			msg_flag.msg_id = CMD_REP_UPLOAD_MCU_FW;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_UPD_STATE:
 			msg_flag.msg_id = CMD_REP_MCU_UPD_STATE;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(upgrade_state);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_BAT_CHARGE_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_BAT_CHARGE_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_SELF_CHECK://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_SELF_CHECK;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		default:
 			//fill_msg(&msg_flag);
@@ -650,11 +671,6 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			ret = EC_OK;
 			break;
 		case CMD_REQ_GET_SOC_POWER_NUM:
-			if(is_little_endian())
-			{
-				endian_conved_func((void *)&global_soc_power_num.off_num, 1);
-				endian_conved_func((void *)&global_soc_power_num.on_num, 1);
-			}
 			memcpy(msg_ptr->uart_msg_data.msg_ptr, &global_soc_power_num, sizeof(global_soc_power_num));
 			ret = EC_OK;
 			break;
@@ -731,14 +747,6 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			my_ptr = (uint8_t *)(msg_ptr->uart_msg_data.msg_ptr) + 6;
 			memcpy(upgrade_pack, my_ptr, mcu_pack.size);
 			//写flash流程
-			if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
-			{
-				flashdestination = A_SYSTEM_APPLICATION_ADDRESS;
-			}
-			else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
-			{
-				flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
-			}
 			ret = flash_write_bytes(upgrade_pack, flashdestination + write_index, mcu_pack.size);
 			if(ret != 0)
 			{
@@ -836,7 +844,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			msg_flag.msg_content = log_fill;
 			msg_flag.msg_len = log_size;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			API_WatchDog_FeedDog();
 			mcu_timeout.mcu_req_log_tick = HAL_GetTick();
 			mcu_timeout.mcu_req_log_flag = 1;
@@ -846,7 +854,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			msg_flag.errcode = 0;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			mcu_timeout.mcu_req_get_bat_info_tick = HAL_GetTick();
 			mcu_timeout.mcu_req_get_bat_info_flag = 1;
 			break;
@@ -856,7 +864,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			msg_flag.msg_len = sizeof(mcu_self_check_ret);
 			msg_flag.msg_content = active_msg->uart_msg_data.msg_ptr;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SHUTDOWN_SOC:
 			if(shutdown_state_value.req_msg_send == 0)
@@ -866,7 +874,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 				msg_flag.msg_len = sizeof(shutdown_soc);
 				msg_flag.msg_content = active_msg->uart_msg_data.msg_ptr;
 				fill_msg(&msg_flag);
-				HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output , msg_flag.msg_total_len, 1000);
+				HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output , msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 				shutdown_state_value.req_msg_send = 1;
 				shutdown_state_value.curr_tick = HAL_GetTick();
 				mcu_timeout.mcu_req_shutdown_soc_tick = HAL_GetTick();
@@ -876,16 +884,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 		case CMD_REQ_MCU_UPD_READY:
 			msg_flag.msg_id = active_msg->msg_id;
 			API_WatchDog_FeedDog();
-	//擦除FLASH流程
-			if(a_system_startup_flag == 1 && b_system_startup_flag == 0)
-			{
-				ret = erase_flash(A_SYSTEM_APPLICATION_ADDRESS, 0x10000);
-			}
-			else if(a_system_startup_flag == 0 && b_system_startup_flag == 1)
-			{
-				ret = erase_flash(B_SYSTEM_APPLICATION_ADDRESS, 0x10000);
-			}
-			
+			ret = erase_flash(B_SYSTEM_APPLICATION_ADDRESS, ERASE_FILE_FLASH_SIZE);
 			if(ret != 0)
 			{
 				msg_flag.errcode = EC_FAIL;
@@ -898,7 +897,7 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			API_WatchDog_FeedDog();
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, 1000);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			mcu_timeout.mcu_req_udp_ready_tick = HAL_GetTick();
 			mcu_timeout.mcu_req_udp_ready_flag = 1;
 			break;

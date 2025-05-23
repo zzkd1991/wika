@@ -190,13 +190,14 @@ extern __IO uint32_t uwTick;
 int time_ret = 0;
 uint8_t interflash_ret = 0;
 system_status sys_stat;
+extern uint8_t ab_system_arr[512]MEM_ALIGNED(8);
+extern uint32_t flashdestination;
 
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  uint8_t ab_system_arr[4];
   /* USER CODE END 1 */
-
+	__enable_irq();
   /* MCU Configuration--------------------------------------------------------*/
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
@@ -250,8 +251,13 @@ int main(void)
 	rtc_ret = ds3232_probe();	
 	low_power_func(1);
 	FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, 4);
-	memcpy(&a_system_startup_flag, ab_system_arr, 2);
-	memcpy(&b_system_startup_flag, ab_system_arr + 2, 2);
+	memcpy(&binfile.curr_partition, ab_system_arr, 1);
+	
+	flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
+	
+	if(!(binfile.curr_partition == 0 || binfile.curr_partition == 1))
+		return 1;
+
 	while (1)
 	{  
 		//ds3232_read_time(&rct_read);
@@ -330,11 +336,14 @@ int main(void)
 	quick_charge_ret = quick_charge_indication(&quick_value);
 	//my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 #endif
+
+#if 1
 		uart_msg_proc_flow();
 		get_battery_info_func();
-		self_check_pro_flow();
+		//self_check_pro_flow();
 		shutdown_func_from_soc();
 		//shutdown_func_from_button();
+#endif		
 	}
   /* USER CODE END 3 */
 }

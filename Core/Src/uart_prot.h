@@ -5,8 +5,13 @@
 
 #define A_SYSTEM_APPLICATION_ADDRESS	0x8010000
 #define B_SYSTEM_APPLICATION_ADDRESS	0x8020000
-
 #define AB_SYSTEM_FLAG_ADDRESS	0x8030000
+#define ERASE_FILE_FLASH_SIZE	0x8000
+#define UART_SEND_TIMEOUT_LENGTH		1000
+
+#define MY_MD5_SIZE		16
+#define MY_MD5_READ_DATA_SIZE 512
+
 
 #define MK_CMDID(t,id)		((((t)&0x0f) << 12) | (((id)&0xfff)))		
 #define MSG_LENG	1024
@@ -98,8 +103,8 @@ __packed typedef struct mcu_version_t {
 }mcu_version;
 
 __packed typedef struct soc_power_num_t {
-	uint32_t on_num;
-	uint32_t off_num;
+	uint8_t on_num;
+	uint8_t off_num;
 }soc_power_num;
 
 __packed typedef struct shutdown_soc_t {
@@ -149,6 +154,12 @@ __packed typedef struct req_upgrade_mcu_t {
 	int minor;
 	int8_t pad;
 }req_upgrade_mcu;
+
+__packed typedef struct bin_file_info_t {
+	uint8_t curr_partition;
+	int32_t file_size;
+	uint8_t md5_value[MY_MD5_SIZE];
+}bin_file_info;
 
 
 __packed typedef struct mcu_upgrade_pack_t {
@@ -248,13 +259,13 @@ typedef struct mcu_req_timeout_t
 
 
 #define EC_OK		0
-#define EC_FAIL		-1
-#define EC_PERM		-2
-#define EC_INVAL	-3
-#define EC_NOSPACE	-4
-#define EC_CRC		-5
-#define EC_NODEV	-6
-#define EC_BUSY		-7
+#define EC_FAIL		1
+#define EC_PERM		2
+#define EC_INVAL	3
+#define EC_NOSPACE	4
+#define EC_CRC		5
+#define EC_NODEV	6
+#define EC_BUSY		7
 
 #define UART_MSG_EXTRA_LEN	10
 
@@ -282,6 +293,7 @@ void no_charge_func(void);
 void mcu_send_readymsg_func(void);
 void shutdown_func_from_button(void);
 void get_battery_info_func(void);
+void PreJumpToApplication(void);
 
 
 extern heartbeat_pro heartbeat_value;
@@ -289,8 +301,7 @@ extern soc_power_num global_soc_power_num;
 extern uint16_t myheartbeat_timeout_cnt;
 extern uint8_t switch_en_flag_12v;
 extern uint16_t REAL_VALUE;
-extern uint8_t a_system_startup_flag;
-extern uint8_t b_system_startup_flag;
+extern bin_file_info binfile;
 
 
 #endif
