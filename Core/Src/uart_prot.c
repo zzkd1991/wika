@@ -140,6 +140,14 @@ void endian_conved_func(void *value, uint8_t type)
 	}
 }
 
+void LPUART1_UART_Config(uint32_t baudrate)
+{
+	extern void MX_LPUART1_UART_Init(void);
+
+	hlpuart1.Init.BaudRate = baudrate;
+	MX_LPUART1_UART_Init();
+}
+
 
 void turnoff_soc_func(void)
 {
@@ -303,7 +311,7 @@ void PreJumpToApplication(void)
 		memcpy(ab_system_arr, &binfile, sizeof(binfile));
 		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
 		FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, sizeof(ab_system_arr));
-		if(ab_system_arr[0] == binfile.write_succ);
+		if(ab_system_arr[0] == binfile.write_succ)
 		{
 			break;
 		}

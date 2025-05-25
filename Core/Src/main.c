@@ -84,7 +84,7 @@ void Init_Moving_Average_Filter(void)
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_LPUART1_UART_Init(void);
+void MX_LPUART1_UART_Init(void);
 static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -223,7 +223,7 @@ int main(void)
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 	MX_DMA_Init();
-	MX_LPUART1_UART_Init();
+	LPUART1_UART_Config(115200);
 	MX_ADC1_Init();
 
 	// FLASH_If_Init();
@@ -454,7 +454,7 @@ static void MX_ADC1_Init(void)
   * @param None
   * @retval None
   */
-static void MX_LPUART1_UART_Init(void)
+void MX_LPUART1_UART_Init(void)
 {
 
   /* USER CODE BEGIN LPUART1_Init 0 */

@@ -296,6 +296,7 @@ void mcu_send_readymsg_func(void);
 void shutdown_func_from_button(void);
 void get_battery_info_func(void);
 void PreJumpToApplication(void);
+void LPUART1_UART_Config(uint32_t baudrate);
 
 
 extern heartbeat_pro heartbeat_value;
