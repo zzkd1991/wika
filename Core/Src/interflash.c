@@ -71,7 +71,7 @@ uint8_t erase_flash(uint32_t flash_start_addr, uint32_t length)
 	return 0;
 }
 
-int FLASH_If_Read(__IO uint32_t FlashAddr, uint8_t *buf, uint32_t DataLength)
+int FLASH_If_Read(__IO uint32_t FlashAddr, uint8_t *buf, int32_t DataLength)
 {
 	while(DataLength > 0)
 	{

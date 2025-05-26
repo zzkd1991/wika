@@ -46,8 +46,6 @@ uint8_t switch_en_flag_12v = 0;
 uint8_t ab_system_arr[512]MEM_ALIGNED(8) = {0};
 bin_file_info binfile = {0};
 
-uint8_t enter_cnt = 0;
-
 typedef void (*pFunction)(void);
 
 uint32_t flashdestination;
@@ -301,17 +299,16 @@ int file_md5_func(uint8_t *md5_str)
 void PreJumpToApplication(void)
 {
 	uint8_t write_cnt = 3;
-	enter_cnt++;
 	while(write_cnt > 0)
 	{
 		erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
 		binfile.file_size = global_upgrade_mcu.filesize;
-		binfile.write_succ = 0x66;
+		binfile.update_succ = 0x66;
 		file_md5_func(binfile.md5_value);
 		memcpy(ab_system_arr, &binfile, sizeof(binfile));
 		flash_write_bytes(ab_system_arr, AB_SYSTEM_FLAG_ADDRESS, sizeof(ab_system_arr));
 		FLASH_If_Read(AB_SYSTEM_FLAG_ADDRESS, ab_system_arr, sizeof(ab_system_arr));
-		if(ab_system_arr[0] == binfile.write_succ)
+		if(ab_system_arr[0] == binfile.update_succ)
 		{
 			break;
 		}
@@ -732,7 +729,8 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				endian_conved_func((void *)&global_upgrade_mcu.filesize, 1);
 				endian_conved_func((void *)&global_upgrade_mcu.minor, 1);
 			}
-			ret = EC_OK;
+			ret = EC_OK;			
+			write_index = 0;
 			break;
 		case CMD_REP_MCU_UPD_READY:
 			memcpy(&global_soc_ack, msg_ptr->uart_msg_data.msg_ptr, sizeof(global_soc_ack));

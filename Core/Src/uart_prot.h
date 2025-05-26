@@ -158,7 +158,7 @@ __packed typedef struct req_upgrade_mcu_t {
 }req_upgrade_mcu;
 
 __packed typedef struct bin_file_info_t {
-	uint8_t write_succ;
+	uint8_t update_succ;
 	int32_t file_size;
 	uint8_t md5_value[MY_MD5_STR_LEN];
 }bin_file_info;
@@ -261,13 +261,13 @@ typedef struct mcu_req_timeout_t
 
 
 #define EC_OK		0
-#define EC_FAIL		1
-#define EC_PERM		2
-#define EC_INVAL	3
-#define EC_NOSPACE	4
-#define EC_CRC		5
-#define EC_NODEV	6
-#define EC_BUSY		7
+#define EC_FAIL		-1
+#define EC_PERM		-2
+#define EC_INVAL	-3
+#define EC_NOSPACE	-4
+#define EC_CRC		-5
+#define EC_NODEV	-6
+#define EC_BUSY		-7
 
 #define UART_MSG_EXTRA_LEN	10
 
