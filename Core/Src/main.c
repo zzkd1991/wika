@@ -231,9 +231,7 @@ int main(void)
 	i2c_init(DS3232_PORT);
 	i2c_init(SW6301_PORT);
 	i2c_init(DS2782_PORT);
-	HAL_Delay(2000);
 	turnon_soc_func();
-	HAL_Delay(1000);	
 	API_WatchDog_Enable(0);
 	//HAL_Delay(5000);
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
