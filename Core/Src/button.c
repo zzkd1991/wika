@@ -2,6 +2,7 @@
 
 #define KEY_DELAY_TIME 		1000
 static uint8_t key_scan_flag = 0;
+uint8_t soc_onoff_state = 0;
 
 uint8_t Key_Scan(void)
 {

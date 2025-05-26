@@ -232,7 +232,15 @@ void shutdown_func_from_button(void)
 {
 	if(Key_Scan() == 1)
 	{
-		shutdown_func(1);
+		soc_onoff_state = !soc_onoff_state;
+		if(soc_onoff_state == 1)
+		{
+			shutdown_func(1);
+		}
+		else if(soc_onoff_state == 0)
+		{
+			turnon_soc_func();
+		}
 	}	
 }
 
@@ -404,7 +412,7 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 {
 	uint16_t msg_id;
 	msg_id = msg_ptr->msg_id;
-	
+	uint8_t send_msg_flag = 1;
 	fill_msg_flag msg_flag;
 	msg_flag.msg_output = uart_content;
 	msg_flag.errcode = errcode;
@@ -415,45 +423,40 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 			msg_flag.msg_id = CMD_REP_HEARTBEAT;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SOC_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_SOC_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_MCU_VER:
 			msg_flag.msg_id = CMD_REP_GET_MCU_VER;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(mcu_version);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_SOC_POWER_NUM:
 			msg_flag.msg_id = CMD_REP_GET_SOC_POWER_NUM;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(global_soc_power_num);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_GET_RTC:
 			msg_flag.msg_id = CMD_REP_GET_RTC;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(struct rtc_datetime);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SET_RTC://fixed_msg
 			msg_flag.msg_id = CMD_REP_SET_RTC;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_CHARGE_CTRL://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_CHARGE_CTRL;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
+			send_msg_flag = 0;
 			break;
 		case CMD_REQ_UPGRADE_MCU://fixed_msg
 			msg_flag.msg_id = CMD_REP_UPGRADE_MCU;
@@ -463,37 +466,36 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 				notify_upgrade_flag	= 1;
 			}
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_UPLOAD_MCU_FW://fixed_msg
 			msg_flag.msg_id = CMD_REP_UPLOAD_MCU_FW;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_UPD_STATE:
 			msg_flag.msg_id = CMD_REP_MCU_UPD_STATE;
 			msg_flag.msg_content = msg_ptr->uart_msg_data.msg_ptr;
 			msg_flag.msg_len = sizeof(upgrade_state);
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_BAT_CHARGE_STATE://fixed_msg
 			msg_flag.msg_id = CMD_REP_BAT_CHARGE_STATE;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_MCU_SELF_CHECK://fixed_msg
 			msg_flag.msg_id = CMD_REP_MCU_SELF_CHECK;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 			break;
 		default:
-			//fill_msg(&msg_flag);
-			//msg_flag.msg_total_len = 0;
+			send_msg_flag = 0;
 			break;
+	}
+
+	if(send_msg_flag == 1)
+	{
+		HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len , UART_SEND_TIMEOUT_LENGTH);
 	}
 }
 
