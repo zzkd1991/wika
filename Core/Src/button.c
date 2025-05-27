@@ -26,5 +26,3 @@ uint8_t Key_Scan(void)
 	}
 	return 0;
 }
-
-

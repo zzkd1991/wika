@@ -34,5 +34,3 @@ uint8_t interflash_test(void)
 	}
 }
 
-
-

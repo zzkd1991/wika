@@ -230,6 +230,7 @@ static void shutdown_func(uint8_t shutdown)//按键检测函数中调用
 
 void shutdown_func_from_button(void)
 {
+	extern uint8_t soc_onoff_state;
 	if(Key_Scan() == 1)
 	{
 		soc_onoff_state = !soc_onoff_state;
@@ -1012,5 +1013,3 @@ uint8_t uart_msg_proc_flow(void)
 
 	return 1;
 }
-
-
