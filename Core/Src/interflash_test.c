@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define READ_WRITE_CNT		104
-#define INTER_FLASH_TEST_ADDRESS	0x8020000
+#define INTER_FLASH_TEST_ADDRESS	(AB_SYSTEM_FLAG_ADDRESS + FLASH_PAGE_SIZE * 2)
 
 uint8_t write_cont[READ_WRITE_CNT] MEM_ALIGNED(8) = {0};
 uint8_t read_cont[READ_WRITE_CNT] MEM_ALIGNED(4) = {0};
@@ -12,7 +12,7 @@ uint8_t read_cont[READ_WRITE_CNT] MEM_ALIGNED(4) = {0};
 uint8_t interflash_test(void)
 {	
 	uint8_t ret;
-	ret = erase_flash(INTER_FLASH_TEST_ADDRESS, 0x10000);
+	ret = erase_flash(INTER_FLASH_TEST_ADDRESS, FLASH_PAGE_SIZE);
 	if(ret != 0)
 	{
 		return 1;
