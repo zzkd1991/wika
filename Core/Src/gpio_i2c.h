@@ -22,6 +22,3 @@ void i2c_nack(uint8_t port);
 
 
 #endif
-
-
-

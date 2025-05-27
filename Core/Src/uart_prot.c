@@ -1012,5 +1012,3 @@ uint8_t uart_msg_proc_flow(void)
 
 	return 1;
 }
-
-

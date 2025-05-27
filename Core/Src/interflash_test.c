@@ -33,6 +33,3 @@ uint8_t interflash_test(void)
 		return 1;
 	}
 }
-
-
-

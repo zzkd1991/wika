@@ -462,5 +462,3 @@ int quick_charge_switch(quick_charge_conf value)
 	ret = sw6301_write(0x11F, (uint8_t *)&value);
 	return ret;
 }
-
-
