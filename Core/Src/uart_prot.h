@@ -186,6 +186,22 @@ typedef struct msg_data_t {
 	void* msg_ptr;
 }msg_data;
 
+typedef struct soc_power_col_t {
+	uint32_t soc_shutdown_tick;
+	uint8_t soc_shutdown_flag;
+	uint8_t soc_shutdown_heartbeat;
+	uint8_t system_vol_flag;
+	uint8_t switch_en_flag_12v;	
+}soc_power_col;
+
+typedef struct update_state_t {
+	uint16_t last_pack_index;
+	uint32_t write_index;
+	uint8_t update_percentage;
+	uint32_t flashdestination;
+	uint8_t notify_upgrade_flag;	
+}update_state;
+
 typedef struct fill_msg_flag_t {
 	uint16_t msg_id;
 	//uint8_t fixed_msg;
@@ -221,6 +237,7 @@ typedef struct msg_proc_t
 typedef struct heartbeat_pro_t
 {
 	uint32_t last_tick_value;
+	uint8_t first_beat_flag;
 }heartbeat_pro;
 
 typedef struct shutdown_state_t
@@ -302,9 +319,9 @@ void LPUART1_UART_Config(uint32_t baudrate);
 extern heartbeat_pro heartbeat_value;
 extern soc_power_num global_soc_power_num;
 extern uint16_t myheartbeat_timeout_cnt;
-extern uint8_t switch_en_flag_12v;
 extern uint16_t REAL_VALUE;
 extern bin_file_info binfile;
+extern update_state update_state_ins;
 
 
 #endif

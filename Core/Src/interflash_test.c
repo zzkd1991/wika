@@ -1,6 +1,7 @@
 #include "interflash.h"
 #include "interflash_test.h"
 #include "led.h"
+#include "uart_prot.h"
 #include <string.h>
 
 #define READ_WRITE_CNT		104

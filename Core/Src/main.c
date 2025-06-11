@@ -191,7 +191,6 @@ int time_ret = 0;
 uint8_t interflash_ret = 0;
 system_status sys_stat;
 extern uint8_t ab_system_arr[512]MEM_ALIGNED(8);
-extern uint32_t flashdestination;
 
 int main(void)
 {
@@ -248,7 +247,7 @@ int main(void)
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
 	rtc_ret = ds3232_probe();	
 	low_power_func(1);	
-	flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
+	update_state_ins.flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
 	erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
 
 	while (1)
@@ -333,7 +332,7 @@ int main(void)
 #if 1
 		uart_msg_proc_flow();
 		get_battery_info_func();
-		//self_check_pro_flow();
+		self_check_pro_flow();
 		shutdown_func_from_soc();
 		shutdown_func_from_button();
 #endif		
