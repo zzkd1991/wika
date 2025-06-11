@@ -41,6 +41,9 @@ bin_file_info binfile = {0};
 soc_power_col socpower_ins = {0};
 update_state update_state_ins = {0};
 
+uint16_t on_time_cnt = 0;
+uint16_t off_time_cnt = 0;
+
 typedef void (*pFunction)(void);
 
 uint32_t JumpAddress;
@@ -133,7 +136,6 @@ void endian_conved_func(void *value, uint8_t type)
 void LPUART1_UART_Config(uint32_t baudrate)
 {
 	extern void MX_LPUART1_UART_Init(void);
-
 	hlpuart1.Init.BaudRate = baudrate;
 	MX_LPUART1_UART_Init();
 }
@@ -141,11 +143,13 @@ void LPUART1_UART_Config(uint32_t baudrate)
 
 void turnoff_soc_func(void)
 {
+	off_time_cnt++;
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
 }
 
 void turnon_soc_func(void)
 {
+	on_time_cnt++;
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
 }
 
@@ -181,7 +185,7 @@ void shutdown_func_from_soc(void)
 	}
 }
 
-static void shutdown_func(uint8_t shutdown)//按键检测函数中调用
+static void shutdown_func(uint8_t shutdown)//主动发送关闭soc消息，并关闭soc,按键检测函数中调用
 {
 	uart_msg msg_inst;
 	shutdown_soc shutdown_value;	
@@ -223,7 +227,7 @@ static void shutdown_func(uint8_t shutdown)//按键检测函数中调用
 	}
 }
 
-void shutdown_func_from_button(void)
+void soc_onoff_from_button(void)
 {
 	if(Key_Scan() == 1)
 	{
@@ -750,6 +754,9 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			}
 			ret = EC_OK;			
 			update_state_ins.write_index = 0;
+			update_state_ins.last_pack_index = 0;
+			update_state_ins.update_percentage = 0;
+			update_state_ins.notify_upgrade_flag = 0;
 			break;
 		case CMD_REP_MCU_UPD_READY:
 			memcpy(&global_soc_ack, msg_ptr->uart_msg_data.msg_ptr, sizeof(global_soc_ack));

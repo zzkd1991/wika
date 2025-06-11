@@ -310,7 +310,7 @@ void mcu_send_log_flow(mcu_log *log, char *log_content);
 void power_manager_func(void);
 void no_charge_func(void);
 void mcu_send_readymsg_func(void);
-void shutdown_func_from_button(void);
+void soc_onoff_from_button(void);
 void get_battery_info_func(void);
 void PreJumpToApplication(void);
 void LPUART1_UART_Config(uint32_t baudrate);

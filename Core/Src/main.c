@@ -334,7 +334,7 @@ int main(void)
 		get_battery_info_func();
 		self_check_pro_flow();
 		shutdown_func_from_soc();
-		shutdown_func_from_button();
+		soc_onoff_from_button();
 #endif		
 	}
   /* USER CODE END 3 */
