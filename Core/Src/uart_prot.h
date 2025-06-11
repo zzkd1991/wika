@@ -246,6 +246,11 @@ typedef struct shutdown_state_t
 	uint8_t req_msg_send;
 }shutdown_state;
 
+enum data_size {
+	BIT_SIZE_16,
+	BIT_SIZE_32,
+};
+
 typedef struct mcu_req_timeout_t
 {
 	uint32_t mcu_req_bat_discharge_tick;

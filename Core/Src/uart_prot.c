@@ -123,11 +123,11 @@ void swap_endian(uint8_t *data, size_t size)
 
 void endian_conved_func(void *value, uint8_t type)
 {
-	if(type == 0)
+	if(type == BIT_SIZE_16)
 	{
 		swap_endian((uint8_t *)value, sizeof(uint16_t));
 	}
-	else if(type == 1)
+	else if(type == BIT_SIZE_32)
 	{
 		swap_endian((uint8_t *)value, sizeof(uint32_t));
 	}
@@ -370,7 +370,7 @@ void fill_msg(fill_msg_flag *msg_flag)
 		rep_value.errcode = msg_flag->errcode;
 		if(is_little_endian())
 		{
-			endian_conved_func((void *)&rep_value.errcode, 0);
+			endian_conved_func((void *)&rep_value.errcode, BIT_SIZE_16);
 		}
 		memcpy(&msg_flag->msg_output[6], &rep_value, sizeof(rep_value));
 		calc_crc = crc16(0, msg_flag->msg_output, 6 + MSG_FIXED_SIZE);		
@@ -392,7 +392,7 @@ void fill_msg(fill_msg_flag *msg_flag)
 		rep_value.errcode = EC_OK;
 		if(is_little_endian())
 		{
-			endian_conved_func((void *)&rep_value.errcode, 0);
+			endian_conved_func((void *)&rep_value.errcode, BIT_SIZE_16);
 		}
 		memcpy(&msg_flag->msg_output[6], &rep_value, sizeof(rep_value));
 		memcpy(&msg_flag->msg_output[6 + sizeof(rep_value)], msg_flag->msg_content, msg_flag->msg_len);
@@ -561,8 +561,8 @@ void self_check_pro_flow(void)
 		board_self_check_func(self_check_ins, &self_check_ret_ins);
 		if(is_little_endian())
 		{
-			endian_conved_func((void *)&self_check_ret_ins.mod, 1);
-			endian_conved_func((void *)&self_check_ret_ins.result, 1);
+			endian_conved_func((void *)&self_check_ret_ins.mod, BIT_SIZE_32);
+			endian_conved_func((void *)&self_check_ret_ins.result, BIT_SIZE_32);
 		}
 		uart_msg_temp.uart_msg_data.msg_ptr = &self_check_ret_ins;
 		uart_msg_temp.ret = EC_OK;
@@ -671,7 +671,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&rtc_datetime, my_ptr, sizeof(rtc_datetime));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&rtc_datetime.year, 0);
+				endian_conved_func((void *)&rtc_datetime.year, BIT_SIZE_16);
 			}
 			rtc_time.tm_sec = rtc_datetime.second;
 			rtc_time.tm_min = rtc_datetime.minute;
@@ -697,7 +697,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 				rtc_datetime.year = rtc_time.tm_year + 1900;
 				if(is_little_endian())
 				{
-					endian_conved_func((void *)&rtc_datetime.year, 0);
+					endian_conved_func((void *)&rtc_datetime.year, BIT_SIZE_16);
 				}
 				memcpy(msg_ptr->uart_msg_data.msg_ptr, &rtc_datetime, sizeof(rtc_datetime));			
 				ret = EC_OK;
@@ -739,7 +739,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&global_mcu_log, my_ptr, sizeof(global_mcu_log));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&global_mcu_log.errcode, 0);
+				endian_conved_func((void *)&global_mcu_log.errcode, BIT_SIZE_16);
 			}
 			ret = EC_OK;
 			mcu_timeout.soc_ack_log_flag = 1;
@@ -749,8 +749,8 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&global_upgrade_mcu, my_ptr, sizeof(global_upgrade_mcu));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&global_upgrade_mcu.filesize, 1);
-				endian_conved_func((void *)&global_upgrade_mcu.minor, 1);
+				endian_conved_func((void *)&global_upgrade_mcu.filesize, BIT_SIZE_32);
+				endian_conved_func((void *)&global_upgrade_mcu.minor, BIT_SIZE_32);
 			}
 			ret = EC_OK;			
 			update_state_ins.write_index = 0;
@@ -762,7 +762,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&global_soc_ack, msg_ptr->uart_msg_data.msg_ptr, sizeof(global_soc_ack));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&global_soc_ack.errcode, 0);
+				endian_conved_func((void *)&global_soc_ack.errcode, BIT_SIZE_16);
 			}
 			mcu_timeout.soc_ack_udp_ready_flag = 1;
 			break;
@@ -774,7 +774,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy((void *)&mcu_pack.index, my_ptr, 2);
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&mcu_pack.index, 0);
+				endian_conved_func((void *)&mcu_pack.index, BIT_SIZE_16);
 			}
 			last_pack = mcu_pack.index >> 15;
 			pack_index = mcu_pack.index & 0x7FFF;
@@ -787,7 +787,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy((void *)&mcu_pack.size, my_ptr, 2);
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&mcu_pack.size, 0);
+				endian_conved_func((void *)&mcu_pack.size, BIT_SIZE_16);
 			}
 			my_ptr = (uint8_t *)(msg_ptr->uart_msg_data.msg_ptr) + 6;
 			memcpy(upgrade_pack, my_ptr, mcu_pack.size);
@@ -840,7 +840,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&self_check_value, msg_ptr->uart_msg_data.msg_ptr, sizeof(self_check_value));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&self_check_value.mod, 1);
+				endian_conved_func((void *)&self_check_value.mod, BIT_SIZE_32);
 			}
 			memcpy((void *)&self_check_ins.inst, (void *)&self_check_value, sizeof(self_check_value));
 			self_check_ins.self_check_flow_flag = 1;			
@@ -851,7 +851,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			memcpy(&global_selfcheck_ret, my_ptr, sizeof(global_selfcheck_ret));
 			if(is_little_endian())
 			{
-				endian_conved_func((void *)&global_selfcheck_ret.errcode, 0);
+				endian_conved_func((void *)&global_selfcheck_ret.errcode, BIT_SIZE_16);
 			}
 			ret = EC_OK;			
 		default:
