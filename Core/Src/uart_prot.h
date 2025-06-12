@@ -239,7 +239,7 @@ typedef struct msg_proc_t
 typedef struct heartbeat_pro_t
 {
 	uint32_t last_tick_value;
-	uint8_t first_beat_flag;
+	uint8_t first_beat_recvd;
 }heartbeat_pro;
 
 typedef struct shutdown_state_t

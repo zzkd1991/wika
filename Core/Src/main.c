@@ -297,7 +297,7 @@ int main(void)
 #endif
 
 #if 1
-		//heartbeat_timeout_func();
+		heartbeat_timeout_func();
 		get_system_status(&sys_stat);
 		no_charge_func();
 		mcu_send_readymsg_func();

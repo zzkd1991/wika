@@ -159,7 +159,7 @@ void heartbeat_timeout_func(void)
 {
 	if(socpower_ins.soc_shutdown_heartbeat == 1)
 		return;
-	if(heartbeat_value.first_beat_flag == 0)
+	if(heartbeat_value.first_beat_recvd == 0)
 		return;
 	
 	if(HAL_GetTick() - heartbeat_value.last_tick_value >= 15000)
@@ -844,7 +844,7 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			}
 			break;
 		case CMD_REQ_HEARTBEAT:
-			heartbeat_value.first_beat_flag = 1;
+			heartbeat_value.first_beat_recvd = 1;
 			heartbeat_value.last_tick_value = HAL_GetTick();
 			ret = EC_OK;
 			break;

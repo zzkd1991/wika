@@ -12,7 +12,7 @@ uint8_t Key_Scan(void)
 			key_state.key_scan_tick_flag = 1;
 		}
 		
-		if(HAL_GetTick() - key_state.key_curr_tick > 1000)
+		if(HAL_GetTick() - key_state.key_curr_tick > 50)
 		{
 			if(HAL_GPIO_ReadPin(KEY_GPIO_PORT, KEY_PIN) == 1)
 			{
