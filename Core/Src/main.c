@@ -249,6 +249,7 @@ int main(void)
 	low_power_func(1);	
 	update_state_ins.flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
 	erase_flash(AB_SYSTEM_FLAG_ADDRESS, FLASH_PAGE_SIZE);
+	global_soc_power_num.on_num +=1;
 
 	while (1)
 	{  
@@ -296,7 +297,7 @@ int main(void)
 #endif
 
 #if 1
-		heartbeat_timeout_func();
+		//heartbeat_timeout_func();
 		get_system_status(&sys_stat);
 		no_charge_func();
 		mcu_send_readymsg_func();
@@ -335,6 +336,8 @@ int main(void)
 		self_check_pro_flow();
 		shutdown_func_from_soc();
 		soc_onoff_from_button();
+		turnon_soc_form_sys_vol();
+		reset_mcu_proc_flow();
 #endif		
 	}
   /* USER CODE END 3 */

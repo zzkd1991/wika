@@ -68,8 +68,8 @@ enum cmd_id_t cmd_id_array[34] =
 	CMD_REP_SET_RTC,//13
 	CMD_REQ_MCU_SELF_CHECK,//14
 	CMD_REP_MCU_SELF_CHECK,//15
-	CMD_REQ_MCU_CHARGE_CTRL,//16
-	CMD_REP_MCU_CHARGE_CTRL,//17
+	CMD_REQ_MCU_RESET,//16
+	CMD_REP_MCU_RESET,//17
 	CMD_REQ_GET_MCU_VER,//18
 	CMD_REP_GET_MCU_VER,//19
 	CMD_REQ_GET_SOC_POWER_NUM,//20
@@ -145,12 +145,14 @@ void turnoff_soc_func(void)
 {
 	off_time_cnt++;
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);//关机
+	key_state.soc_onoff_state = 0;
 }
 
 void turnon_soc_func(void)
 {
 	on_time_cnt++;
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);
+	key_state.soc_onoff_state = 1;
 }
 
 void heartbeat_timeout_func(void)
@@ -173,6 +175,26 @@ void heartbeat_timeout_func(void)
 	}
 }
 
+static void turnon_func(void)
+{
+	if(shutdown_state_value.first_flag == 0)
+	{
+		shutdown_state_value.curr_tick = HAL_GetTick();
+		shutdown_state_value.first_flag = 1;
+	}
+
+	if(HAL_GetTick() - shutdown_state_value.curr_tick >= 2000)
+	{
+		turnon_soc_func();
+		global_soc_power_num.on_num +=1;
+		shutdown_state_value.first_flag = 0;
+		shutdown_state_value.curr_tick = 0;
+		key_state.key_scan_flag = 0;
+		key_state.key_real_value = 0;
+	}
+}
+
+
 void shutdown_func_from_soc(void)
 {
 	if(socpower_ins.soc_shutdown_flag == 1)
@@ -181,64 +203,59 @@ void shutdown_func_from_soc(void)
 		{
 			socpower_ins.soc_shutdown_flag = 0;
 			turnoff_soc_func();
+			//HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);//关机
 		}
 	}
 }
 
-static void shutdown_func(uint8_t shutdown)//主动发送关闭soc消息，并关闭soc,按键检测函数中调用
+static void shutdown_func(void)
 {
 	uart_msg msg_inst;
-	shutdown_soc shutdown_value;	
-	if(shutdown == 1)
+	shutdown_soc shutdown_value;
+
+	memset(&shutdown_value, 0, sizeof(shutdown_value));
+	if(shutdown_state_value.first_flag == 0)
 	{
+		shutdown_state_value.curr_tick = HAL_GetTick();
 		shutdown_value.shutdown = 1;
 		msg_inst.msg_id = CMD_REQ_SHUTDOWN_SOC;
 		msg_inst.uart_msg_data.msg_ptr = &shutdown_value;
-		mcu_send_msg_flow(&msg_inst);
-		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 3000)
-		{
-			//关机
-			turnoff_soc_func();
-			memset(&shutdown_value, 0, sizeof(shutdown_value));
-			global_soc_power_num.off_num += 1;
-		}
+		mcu_send_msg_flow(&msg_inst);		
+		shutdown_state_value.first_flag = 1;
 	}
-	else if(shutdown == 2)
+	if(HAL_GetTick() - shutdown_state_value.curr_tick >= 2000)
 	{
-		shutdown_value.shutdown = 2;
-		msg_inst.msg_id = CMD_REQ_SHUTDOWN_SOC;
-		msg_inst.uart_msg_data.msg_ptr = &shutdown_value;
-		if(shutdown_state_value.req_msg_send )
-		mcu_send_msg_flow(&msg_inst);
-		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 3000)
-		{
-			turnoff_soc_func();
-			shutdown_state_value.curr_tick = HAL_GetTick();
-			global_soc_power_num.off_num += 1;
-		}
-
-		if(HAL_GetTick() - shutdown_state_value.curr_tick >= 5000)
-		{
-			turnon_soc_func();
-			shutdown_state_value.curr_tick = HAL_GetTick();
-			memset(&shutdown_state_value, 0, sizeof(shutdown_state_value));
-			global_soc_power_num.on_num += 1;
-		}
+		//关机
+		turnoff_soc_func();
+		global_soc_power_num.off_num += 1;
+		shutdown_state_value.first_flag = 0;
+		shutdown_state_value.curr_tick = 0;
+		key_state.key_scan_flag = 0;
+		key_state.key_real_value = 0;
 	}
 }
 
+
 void soc_onoff_from_button(void)
 {
-	if(Key_Scan() == 1)
+	if(key_state.key_scan_flag == 0)
 	{
-		key_state.soc_onoff_state = !key_state.soc_onoff_state;
+		if(Key_Scan() == 1)
+		{
+			key_state.key_scan_flag = 1;
+			key_state.key_real_value = 1;
+		}
+	}
+	
+	if(key_state.key_real_value == 1)
+	{
 		if(key_state.soc_onoff_state == 1)
 		{
-			shutdown_func(1);
+			shutdown_func();
 		}
 		else if(key_state.soc_onoff_state == 0)
 		{
-			turnon_soc_func();
+			turnon_func();
 		}
 	}	
 }
@@ -326,6 +343,18 @@ void PreJumpToApplication(void)
 void JumpToApplication(void)
 {
 	NVIC_SystemReset();
+}
+
+void reset_mcu_proc_flow(void)
+{
+	if(socpower_ins.soc_reset_flag == 1)
+	{
+		if(HAL_GetTick() - socpower_ins.soc_reset_tick >= 3000)
+		{
+			socpower_ins.soc_reset_flag = 0;
+			NVIC_SystemReset();
+		}
+	}	
 }
 
 void bsp_update_jumptoapp_evt_cbk(void)
@@ -451,11 +480,10 @@ void form_ack_uart_msg(uart_msg *msg_ptr, int8_t errcode)
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
 			break;
-		case CMD_REQ_MCU_CHARGE_CTRL://fixed_msg
-			msg_flag.msg_id = CMD_REP_MCU_CHARGE_CTRL;
+		case CMD_REQ_MCU_RESET://fixed_msg
+			msg_flag.msg_id = CMD_REP_MCU_RESET;
 			msg_flag.msg_len = 0;
 			fill_msg(&msg_flag);
-			send_msg_flag = 0;
 			break;
 		case CMD_REQ_UPGRADE_MCU://fixed_msg
 			msg_flag.msg_id = CMD_REP_UPGRADE_MCU;
@@ -632,7 +660,6 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 	rtc_datetime rtc_datetime = {0};
 	struct rtc_time rtc_time = {0};
 	msg_id = msg_ptr->msg_id;
-	battery_charge_state charge_state;
 	uint8_t last_pack;
 	uart_msg jump_uart_msg;
 	uint16_t pack_index;
@@ -721,18 +748,11 @@ uint8_t mcu_action_flow_before_ack(uart_msg *msg_ptr)
 			ret = EC_OK;
 			mcu_timeout.soc_ack_get_bat_info_flag = 1;
 			break;
-		case CMD_REQ_MCU_CHARGE_CTRL:
-			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr + MSG_FIXED_SIZE;
-			memcpy(&charge_state, my_ptr, sizeof(charge_state));
-			ret = charge_switch_func(charge_state.state);
-			if(ret == 0)
-			{
-				ret = EC_OK;
-			}
-			else
-			{
-				ret = EC_FAIL;
-			}
+		case CMD_REQ_MCU_RESET:
+			global_soc_power_num.off_num +=1;
+			socpower_ins.soc_reset_tick = HAL_GetTick();
+			socpower_ins.soc_reset_flag = 1;
+			ret = EC_OK;
 			break;
 		case CMD_REP_MCU_LOG:
 			my_ptr = (uint8_t *)msg_ptr->uart_msg_data.msg_ptr;
@@ -913,19 +933,14 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output, msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
 			break;
 		case CMD_REQ_SHUTDOWN_SOC:
-			if(shutdown_state_value.req_msg_send == 0)
-			{
-				msg_flag.msg_id = active_msg->msg_id;
-				msg_flag.errcode = 0;
-				msg_flag.msg_len = sizeof(shutdown_soc);
-				msg_flag.msg_content = active_msg->uart_msg_data.msg_ptr;
-				fill_msg(&msg_flag);
-				HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output , msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
-				shutdown_state_value.req_msg_send = 1;
-				shutdown_state_value.curr_tick = HAL_GetTick();
-				mcu_timeout.mcu_req_shutdown_soc_tick = HAL_GetTick();
-				mcu_timeout.mcu_req_shutdown_soc_flag = 1;					
-			}
+			msg_flag.msg_id = active_msg->msg_id;
+			msg_flag.errcode = 0;
+			msg_flag.msg_len = sizeof(shutdown_soc);
+			msg_flag.msg_content = active_msg->uart_msg_data.msg_ptr;
+			fill_msg(&msg_flag);
+			HAL_UART_Transmit(&hlpuart1, msg_flag.msg_output , msg_flag.msg_total_len, UART_SEND_TIMEOUT_LENGTH);
+			mcu_timeout.mcu_req_shutdown_soc_tick = HAL_GetTick();
+			mcu_timeout.mcu_req_shutdown_soc_flag = 1;					
 			break;
 		case CMD_REQ_MCU_UPD_READY:
 			msg_flag.msg_id = active_msg->msg_id;

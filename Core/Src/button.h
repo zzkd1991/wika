@@ -8,8 +8,10 @@
 
 typedef struct key_scan_state_t {
 	uint32_t key_curr_tick;
-	uint8_t key_scan_flag;
+	uint8_t key_scan_tick_flag;
 	uint8_t soc_onoff_state;
+	uint8_t key_scan_flag;
+	uint8_t key_real_value;
 }key_scan_state;
 
 uint8_t Key_Scan(void);

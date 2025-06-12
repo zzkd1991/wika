@@ -34,8 +34,8 @@ enum cmd_id_t {
 	CMD_REP_SET_RTC = MK_CMDID(2,4),
 	CMD_REQ_MCU_SELF_CHECK = MK_CMDID(2,5),
 	CMD_REP_MCU_SELF_CHECK = MK_CMDID(2,6),
-	CMD_REQ_MCU_CHARGE_CTRL = MK_CMDID(2,7),
-	CMD_REP_MCU_CHARGE_CTRL = MK_CMDID(2,8),
+	CMD_REQ_MCU_RESET = MK_CMDID(2,7),
+	CMD_REP_MCU_RESET = MK_CMDID(2,8),
 	CMD_REQ_GET_MCU_VER = MK_CMDID(3,1),
 	CMD_REP_GET_MCU_VER = MK_CMDID(3,2),
 	CMD_REQ_GET_SOC_POWER_NUM = MK_CMDID(3,3),
@@ -191,7 +191,9 @@ typedef struct soc_power_col_t {
 	uint8_t soc_shutdown_flag;
 	uint8_t soc_shutdown_heartbeat;
 	uint8_t system_vol_flag;
-	uint8_t switch_en_flag_12v;	
+	uint8_t switch_en_flag_12v;
+	uint8_t soc_reset_flag;
+	uint32_t soc_reset_tick;
 }soc_power_col;
 
 typedef struct update_state_t {
@@ -243,7 +245,7 @@ typedef struct heartbeat_pro_t
 typedef struct shutdown_state_t
 {
 	uint32_t curr_tick;
-	uint8_t req_msg_send;
+	uint8_t first_flag;
 }shutdown_state;
 
 enum data_size {
@@ -319,6 +321,8 @@ void soc_onoff_from_button(void);
 void get_battery_info_func(void);
 void PreJumpToApplication(void);
 void LPUART1_UART_Config(uint32_t baudrate);
+void turnon_soc_form_sys_vol(void);
+void reset_mcu_proc_flow(void);
 
 
 extern heartbeat_pro heartbeat_value;
