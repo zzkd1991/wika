@@ -177,21 +177,9 @@ void heartbeat_timeout_func(void)
 
 static void turnon_func(void)
 {
-	if(shutdown_state_value.first_flag == 0)
-	{
-		shutdown_state_value.curr_tick = HAL_GetTick();
-		shutdown_state_value.first_flag = 1;
-	}
-
-	if(HAL_GetTick() - shutdown_state_value.curr_tick >= 2000)
-	{
-		turnon_soc_func();
-		global_soc_power_num.on_num +=1;
-		shutdown_state_value.first_flag = 0;
-		shutdown_state_value.curr_tick = 0;
-		key_state.key_scan_flag = 0xff;
-		key_state.key_real_value = 0;
-	}
+	turnon_soc_func();
+	global_soc_power_num.on_num +=1;
+	key_state.key_scan_flag = 0xff;
 }
 
 
