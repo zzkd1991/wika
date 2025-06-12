@@ -11,7 +11,7 @@ typedef struct key_scan_state_t {
 	uint8_t key_scan_tick_flag;
 	uint8_t soc_onoff_state;
 	uint8_t key_scan_flag;
-	uint8_t key_real_value;
+	uint8_t onoff_action_flag;
 }key_scan_state;
 
 uint8_t Key_Scan(void);
