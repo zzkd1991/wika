@@ -189,7 +189,7 @@ static void turnon_func(void)
 		global_soc_power_num.on_num +=1;
 		shutdown_state_value.first_flag = 0;
 		shutdown_state_value.curr_tick = 0;
-		key_state.key_scan_flag = 0;
+		key_state.key_scan_flag = 0xff;
 		key_state.key_real_value = 0;
 	}
 }
@@ -230,7 +230,7 @@ static void shutdown_func(void)
 		global_soc_power_num.off_num += 1;
 		shutdown_state_value.first_flag = 0;
 		shutdown_state_value.curr_tick = 0;
-		key_state.key_scan_flag = 0;
+		key_state.key_scan_flag = 0xff;
 		key_state.key_real_value = 0;
 	}
 }
@@ -242,7 +242,7 @@ void soc_onoff_from_button(void)
 	{
 		if(Key_Scan() == 1)
 		{
-			key_state.key_scan_flag = 1;
+			key_state.key_scan_flag = 0xff;
 			key_state.key_real_value = 1;
 		}
 	}

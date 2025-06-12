@@ -549,10 +549,10 @@ static void MX_GPIO_Init(void)
 
 
   /*Configure GPIO pins: PC13*/
-  //GPIO_InitStruct.Pin = GPIO_PIN_13;
-  //GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  //GPIO_InitStruct.Pull = GPIO_NOPULL;
-  //HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 	GPIO_InitStruct.Pin = GPIO_PIN_0;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -561,6 +561,9 @@ static void MX_GPIO_Init(void)
 
   HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+	
+	HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
