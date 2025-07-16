@@ -184,19 +184,21 @@ uint16_t test_soc_system_beat;
 struct rtc_datetime  my_rtc_time;
 uint8_t rtc_len;
 extern void bsp_update_jumptoapp_evt_cbk(void);
-float ibat_curr_limt = 1000;
+float ibat_curr_limt = 1500;
 uart_msg uart_msg_inst;
 extern __IO uint32_t uwTick;
 int time_ret = 0;
 uint8_t interflash_ret = 0;
-system_status sys_stat;
 extern uint8_t ab_system_arr[512]MEM_ALIGNED(8);
+
 
 int main(void)
 {
   /* USER CODE BEGIN 1 */
   /* USER CODE END 1 */
 	__enable_irq();
+	
+	
   /* MCU Configuration--------------------------------------------------------*/
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
@@ -230,9 +232,11 @@ int main(void)
 	i2c_init(DS3232_PORT);
 	i2c_init(SW6301_PORT);
 	i2c_init(DS2782_PORT);
-	turnon_soc_func();
+	//turnon_soc_func();
 	API_WatchDog_Enable(0);
+	LEDR_ON;
 	//HAL_Delay(5000);
+	//LEDR_OFF;
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&ADC_ConvertedValue, 1);
 	/* USER CODE END 2 */
 	Init_Moving_Average_Filter();
@@ -243,8 +247,9 @@ int main(void)
 	Early_Filter_Flow();
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
-	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH);
+	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH);
+	mcu_standby_mode_func();	
 	rtc_ret = ds3232_probe();	
 	low_power_func(1);	
 	update_state_ins.flashdestination = B_SYSTEM_APPLICATION_ADDRESS;
@@ -283,9 +288,11 @@ int main(void)
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBUS, &read_vbus_vol);
 		my_ret5 =  sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_VBAT, &read_vbat_vol);
 		sw6301_read_adc(SW6301_ADC_CHANNEL_IBUS, &read_ibus_curr);
-		quick_charge_indication(&quick_value);
+//		quick_charge_indication(&quick_value);
 		//charge_switch_func(0);
 		set_charge_ibat_current_limit_value(ibat_curr_limt);
+		set_vbus_vol_limit_value(12000);
+
 		//i2c_sw6301_read(0x10, (uint8_t *)&port_curr);
 		//real_port_curr = port_curr * 50;
 		//i2c_sw6301_read(0x11, (uint8_t *)&battery_curr);
@@ -298,14 +305,15 @@ int main(void)
 
 #if 1
 		heartbeat_timeout_func();
-		get_system_status(&sys_stat);
+		//get_system_status(&sys_stat);
 		no_charge_func();
 		mcu_send_readymsg_func();
 		power_manager_func();
 		API_WatchDog_FeedDog();
+		turnon_charge_road();
 #endif
-		LEDG_ON;
-		//HAL_Delay(5000);
+		LEDR_ON;
+		//HAL_Delay(10000);
 
 		//while(1)
 		//{
@@ -326,7 +334,7 @@ int main(void)
 	ds2782_get_capacity(&my_capacity);
 		my_ret4 = get_system_status(&sys_stat);
 	my_test_size = sizeof(my_test_value);
-	quick_charge_ret = quick_charge_indication(&quick_value);
+//	quick_charge_ret = quick_charge_indication(&quick_value);
 	//my_ret5 =	sw6301_read_adc((uint8_t)SW6301_ADC_CHANNEL_IBAT, &read_ibat_curr);
 #endif
 

@@ -323,7 +323,8 @@ void PreJumpToApplication(void);
 void LPUART1_UART_Config(uint32_t baudrate);
 void turnon_soc_form_sys_vol(void);
 void reset_mcu_proc_flow(void);
-
+void mcu_standby_mode_func(void);
+void turnon_charge_road(void);
 
 extern heartbeat_pro heartbeat_value;
 extern soc_power_num global_soc_power_num;

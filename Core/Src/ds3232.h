@@ -56,7 +56,7 @@ int ds3232_check_rtc_status(void);
 void ds3232_reset_flow(void);
 int ds3232_probe(void);
 int ds3232_set_alarm(struct rtc_wkalrm *alarm);
-int ds3232_irq(void);
+//int ds3232_irq(void);
 
 
 #define DS3232_DEBUG_ON			0

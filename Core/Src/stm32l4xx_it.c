@@ -210,7 +210,7 @@ void EXTI0_IRQHandler(void)
 {
 	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
 	LEDG_ON;
-	ds3232_irq();
+//	ds3232_irq();
 	first_alarm++;
 	if(first_alarm == 2)
 	{

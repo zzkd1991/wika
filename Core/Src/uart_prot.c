@@ -40,16 +40,20 @@ uint8_t ab_system_arr[512]MEM_ALIGNED(8) = {0};
 bin_file_info binfile = {0};
 soc_power_col socpower_ins = {0};
 update_state update_state_ins = {0};
+uint8_t key_scan_forbid = 0xff;
 
 uint16_t on_time_cnt = 0;
 uint16_t off_time_cnt = 0;
-
+uint8_t read_succ = 0xff;
 typedef void (*pFunction)(void);
 
 uint32_t JumpAddress;
 pFunction Jump_To_Application;
 
 #define MSG_FIXED_SIZE	sizeof(common_rep)	
+
+void API_EnteryStandby(void);
+
 
 enum cmd_id_t cmd_id_array[34] =
 {
@@ -227,6 +231,9 @@ static void shutdown_func(void)
 
 void soc_onoff_from_button(void)
 {
+	if(key_scan_forbid == 1)
+		return;
+	
 	if(key_state.key_scan_flag == 0)
 	{
 		if(Key_Scan() == 1)
@@ -241,6 +248,7 @@ void soc_onoff_from_button(void)
 		if(key_state.soc_onoff_state == 1)
 		{
 			shutdown_func();
+			API_EnteryStandby();
 		}
 		else if(key_state.soc_onoff_state == 0)
 		{
@@ -953,6 +961,97 @@ void mcu_send_msg_flow(uart_msg *active_msg)
 			break;
 		default:
 			break;
+	}
+}
+
+void mcu_standby_mode_func(void)
+{
+	uint32_t curr_tick = 0;
+	int ret = 0xff;
+	uint8_t read_cnt = 5;
+
+	system_status sys_stat = {0};
+	HAL_Delay(1000);
+	while(read_cnt > 0)
+	{
+		ret = get_system_status(&sys_stat);
+		if(ret == 0 && sys_stat.charge_status == 1)
+		{
+				read_succ = 1;
+				break;
+		}
+		read_cnt--;
+	}
+	
+	if(REAL_VALUE > 8000)
+	{
+			turnon_soc_func();
+	}
+	else if(read_succ == 1)
+	{
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);//??
+			key_scan_forbid = 1;
+	}
+	else
+	{
+		HAL_Delay(50);
+		curr_tick = HAL_GetTick();
+		while(1)
+		{
+				while(HAL_GPIO_ReadPin(KEY_GPIO_PORT, KEY_PIN) == 0)
+				{
+					if(HAL_GetTick() - curr_tick >= 3000)
+					{
+						turnon_soc_func();
+						return;
+					}
+				}
+				break;
+		}
+		HAL_Delay(1000);
+		API_EnteryStandby();
+	}
+}
+
+void turnon_charge_road(void)
+{
+	static uint8_t discharge_flag = 0xff;
+	static uint8_t charge_flag = 0xff;
+	static uint32_t curr_tick = 0;
+	static uint8_t first_time = 0;
+	system_status sys_stat;
+	int ret;
+	ret = get_system_status(&sys_stat);
+	if(ret == 0)
+	{
+		if(sys_stat.charge_status == 1)
+		{
+				discharge_flag = 0;
+				charge_flag = 1;
+				key_scan_forbid = 1;
+				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);//??
+		}
+		else
+		{
+				discharge_flag = 1;
+				charge_flag = 0;
+				first_time = 0;
+				key_scan_forbid = 0;
+				HAL_GPIO_WritePin(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
+		}
+	}
+	
+	if(discharge_flag == 1 && charge_flag == 0)
+	{
+		if(first_time == 0)
+		{
+			first_time = 1;
+			curr_tick = HAL_GetTick();
+		}
+		if(HAL_GetTick() - curr_tick >= 5000)
+		{
+			API_EnteryStandby();
+		}
 	}
 }
 
